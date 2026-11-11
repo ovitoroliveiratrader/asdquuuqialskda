@@ -19,6 +19,7 @@ export type Signal = {
 };
 
 type Series = Record<string, number[]>;
+const at = (s: Series, k: string, i: number): number => s[k]?.[i] ?? NaN;
 
 export type Strategy = {
   archetype: Archetype;
@@ -71,17 +72,17 @@ const paciente: Strategy = {
     };
   },
   decide: (s, i, c, pos, p) => {
-    const ind = { mediaRapida: r2(s.maF[i]), mediaLenta: r2(s.maS[i]), mediaLonga: r2(s.maL[i]), maximaRecente: r2(s.hh[i]), atr: r2(s.atr[i]), fechamento: c.close };
+    const ind = { mediaRapida: r2(at(s, "maF", i)), mediaLenta: r2(at(s, "maS", i)), mediaLonga: r2(at(s, "maL", i)), maximaRecente: r2(at(s, "hh", i)), atr: r2(at(s, "atr", i)), fechamento: c.close };
     if (pos) {
-      if (c.close < s.maF[i]) return { exit: { reason: `Fechamento ${fmt(c.close)} abaixo da média rápida ${fmt(s.maF[i])}: tendência perdeu força.`, indicators: ind } };
-      return { trailStop: c.close - n(p, "trailingAtr") * s.atr[i] };
+      if (c.close < at(s, "maF", i)) return { exit: { reason: `Fechamento ${fmt(c.close)} abaixo da média rápida ${fmt(at(s, "maF", i))}: tendência perdeu força.`, indicators: ind } };
+      return { trailStop: c.close - n(p, "trailingAtr") * at(s, "atr", i) };
     }
-    if (s.maF[i] > s.maS[i] && c.close > s.maL[i] && c.close > s.hh[i]) {
+    if (at(s, "maF", i) > at(s, "maS", i) && c.close > at(s, "maL", i) && c.close > at(s, "hh", i)) {
       return {
         entry: {
-          stop: c.close - n(p, "stopAtr") * s.atr[i],
+          stop: c.close - n(p, "stopAtr") * at(s, "atr", i),
           target: null,
-          reason: `Tendência confirmada: média ${p.mediaRapida} (${fmt(s.maF[i])}) acima da média ${p.mediaLenta} (${fmt(s.maS[i])}), preço acima da média longa (${fmt(s.maL[i])}) e fechamento acima da máxima das últimas ${p.rompimentoCandles} velas (${fmt(s.hh[i])}).`,
+          reason: `Tendência confirmada: média ${p["mediaRapida"]} (${fmt(at(s, "maF", i))}) acima da média ${p["mediaLenta"]} (${fmt(at(s, "maS", i))}), preço acima da média longa (${fmt(at(s, "maL", i))}) e fechamento acima da máxima das últimas ${p["rompimentoCandles"]} velas (${fmt(at(s, "hh", i))}).`,
           indicators: ind,
         },
       };
@@ -116,17 +117,17 @@ const seguidor: Strategy = {
     };
   },
   decide: (s, i, c, pos, p) => {
-    const ind = { mediaRapida: r2(s.maF[i]), mediaLenta: r2(s.maS[i]), canalAlto: r2(s.up[i]), canalBaixo: r2(s.down[i]), atr: r2(s.atr[i]), fechamento: c.close };
+    const ind = { mediaRapida: r2(at(s, "maF", i)), mediaLenta: r2(at(s, "maS", i)), canalAlto: r2(at(s, "up", i)), canalBaixo: r2(at(s, "down", i)), atr: r2(at(s, "atr", i)), fechamento: c.close };
     if (pos) {
-      if (c.close < s.down[i]) return { exit: { reason: `Fechamento ${fmt(c.close)} abaixo da mínima de ${p.canalSaida} velas (${fmt(s.down[i])}): momentum acabou.`, indicators: ind } };
+      if (c.close < at(s, "down", i)) return { exit: { reason: `Fechamento ${fmt(c.close)} abaixo da mínima de ${p["canalSaida"]} velas (${fmt(at(s, "down", i))}): momentum acabou.`, indicators: ind } };
       return {};
     }
-    if (c.close > s.up[i] && s.maF[i] > s.maS[i]) {
+    if (c.close > at(s, "up", i) && at(s, "maF", i) > at(s, "maS", i)) {
       return {
         entry: {
-          stop: c.close - n(p, "stopAtr") * s.atr[i],
+          stop: c.close - n(p, "stopAtr") * at(s, "atr", i),
           target: null,
-          reason: `Rompimento: fechamento ${fmt(c.close)} acima da máxima de ${p.canalEntrada} velas (${fmt(s.up[i])}) com média ${p.mediaRapida} (${fmt(s.maF[i])}) acima da média ${p.mediaLenta} (${fmt(s.maS[i])}).`,
+          reason: `Rompimento: fechamento ${fmt(c.close)} acima da máxima de ${p["canalEntrada"]} velas (${fmt(at(s, "up", i))}) com média ${p["mediaRapida"]} (${fmt(at(s, "maF", i))}) acima da média ${p["mediaLenta"]} (${fmt(at(s, "maS", i))}).`,
           indicators: ind,
         },
       };
@@ -162,17 +163,17 @@ const contrario: Strategy = {
     };
   },
   decide: (s, i, c, pos, p) => {
-    const ind = { rsi: r2(s.rsi[i]), bandaInferior: r2(s.lower[i]), atr: r2(s.atr[i]), fechamento: c.close };
+    const ind = { rsi: r2(at(s, "rsi", i)), bandaInferior: r2(at(s, "lower", i)), atr: r2(at(s, "atr", i)), fechamento: c.close };
     if (pos) {
-      if (s.rsi[i] > n(p, "rsiSaida")) return { exit: { reason: `Sobrecomprado: RSI ${fmt(s.rsi[i])} acima de ${p.rsiSaida}.`, indicators: ind } };
+      if (at(s, "rsi", i) > n(p, "rsiSaida")) return { exit: { reason: `Sobrecomprado: RSI ${fmt(at(s, "rsi", i))} acima de ${p["rsiSaida"]}.`, indicators: ind } };
       return {};
     }
-    if (s.rsi[i] < n(p, "rsiEntrada") && c.close < s.lower[i]) {
+    if (at(s, "rsi", i) < n(p, "rsiEntrada") && c.close < at(s, "lower", i)) {
       return {
         entry: {
-          stop: c.close - n(p, "stopAtr") * s.atr[i],
+          stop: c.close - n(p, "stopAtr") * at(s, "atr", i),
           target: null,
-          reason: `Sobrevendido: RSI ${fmt(s.rsi[i])} abaixo de ${p.rsiEntrada} e fechamento ${fmt(c.close)} abaixo da banda inferior (${fmt(s.lower[i])}).`,
+          reason: `Sobrevendido: RSI ${fmt(at(s, "rsi", i))} abaixo de ${p["rsiEntrada"]} e fechamento ${fmt(c.close)} abaixo da banda inferior (${fmt(at(s, "lower", i))}).`,
           indicators: ind,
         },
       };
@@ -207,18 +208,18 @@ const relampago: Strategy = {
     };
   },
   decide: (s, i, c, pos, p) => {
-    const ind = { mediaRapida: r2(s.maF[i]), mediaLenta: r2(s.maS[i]), rsi: r2(s.rsi[i]), atr: r2(s.atr[i]), fechamento: c.close };
+    const ind = { mediaRapida: r2(at(s, "maF", i)), mediaLenta: r2(at(s, "maS", i)), rsi: r2(at(s, "rsi", i)), atr: r2(at(s, "atr", i)), fechamento: c.close };
     if (pos) {
-      if (s.maF[i] < s.maS[i]) return { exit: { reason: `Médias cruzaram para baixo (${fmt(s.maF[i])} < ${fmt(s.maS[i])}).`, indicators: ind } };
+      if (at(s, "maF", i) < at(s, "maS", i)) return { exit: { reason: `Médias cruzaram para baixo (${fmt(at(s, "maF", i))} < ${fmt(at(s, "maS", i))}).`, indicators: ind } };
       return {};
     }
-    const crossed = s.maF[i] > s.maS[i] && s.maF[i - 1] <= s.maS[i - 1];
-    if (crossed && s.rsi[i] > n(p, "rsiMinimo")) {
+    const crossed = at(s, "maF", i) > at(s, "maS", i) && at(s, "maF", i - 1) <= at(s, "maS", i - 1);
+    if (crossed && at(s, "rsi", i) > n(p, "rsiMinimo")) {
       return {
         entry: {
-          stop: c.close - n(p, "stopAtr") * s.atr[i],
+          stop: c.close - n(p, "stopAtr") * at(s, "atr", i),
           target: c.close * (1 + n(p, "alvoPercentual")),
-          reason: `Cruzamento de alta: média ${p.mediaRapida} (${fmt(s.maF[i])}) passou a média ${p.mediaLenta} (${fmt(s.maS[i])}) com RSI ${fmt(s.rsi[i])}.`,
+          reason: `Cruzamento de alta: média ${p["mediaRapida"]} (${fmt(at(s, "maF", i))}) passou a média ${p["mediaLenta"]} (${fmt(at(s, "maS", i))}) com RSI ${fmt(at(s, "rsi", i))}.`,
           indicators: ind,
         },
       };

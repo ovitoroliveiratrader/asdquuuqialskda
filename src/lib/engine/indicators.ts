@@ -8,8 +8,8 @@ export function sma(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN);
   let sum = 0;
   for (let i = 0; i < values.length; i++) {
-    sum += values[i];
-    if (i >= period) sum -= values[i - period];
+    sum += values[i]!;
+    if (i >= period) sum -= values[i - period]!;
     if (i >= period - 1) out[i] = sum / period;
   }
   return out;
@@ -20,7 +20,7 @@ export function stdev(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN);
   for (let i = period - 1; i < values.length; i++) {
     let acc = 0;
-    for (let j = i - period + 1; j <= i; j++) acc += (values[j] - mean[i]) ** 2;
+    for (let j = i - period + 1; j <= i; j++) acc += (values[j]! - mean[i]!) ** 2;
     out[i] = Math.sqrt(acc / period);
   }
   return out;
@@ -32,18 +32,18 @@ export function rsi(closes: number[], period: number): number[] {
   const gains = new Array<number>(closes.length).fill(0);
   const losses = new Array<number>(closes.length).fill(0);
   for (let i = 1; i < closes.length; i++) {
-    const d = closes[i] - closes[i - 1];
+    const d = closes[i]! - closes[i - 1]!;
     gains[i] = d > 0 ? d : 0;
     losses[i] = d < 0 ? -d : 0;
   }
   let g = 0;
   let l = 0;
   for (let i = 1; i < closes.length; i++) {
-    g += gains[i];
-    l += losses[i];
+    g += gains[i]!;
+    l += losses[i]!;
     if (i > period) {
-      g -= gains[i - period];
-      l -= losses[i - period];
+      g -= gains[i - period]!;
+      l -= losses[i - period]!;
     }
     if (i >= period) {
       const ag = g / period;
@@ -63,8 +63,8 @@ export function atr(
 ): number[] {
   const tr = highs.map((h, i) =>
     i === 0
-      ? h - lows[i]
-      : Math.max(h - lows[i], Math.abs(h - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])),
+      ? h - lows[i]!
+      : Math.max(h - lows[i]!, Math.abs(h - closes[i - 1]!), Math.abs(lows[i]! - closes[i - 1]!)),
   );
   const out = sma(tr, period);
   // The first TR has no previous close; start the series after it.
@@ -77,7 +77,7 @@ export function priorHighest(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN);
   for (let i = period; i < values.length; i++) {
     let m = -Infinity;
-    for (let j = i - period; j < i; j++) m = Math.max(m, values[j]);
+    for (let j = i - period; j < i; j++) m = Math.max(m, values[j]!);
     out[i] = m;
   }
   return out;
@@ -88,7 +88,7 @@ export function priorLowest(values: number[], period: number): number[] {
   const out = new Array<number>(values.length).fill(NaN);
   for (let i = period; i < values.length; i++) {
     let m = Infinity;
-    for (let j = i - period; j < i; j++) m = Math.min(m, values[j]);
+    for (let j = i - period; j < i; j++) m = Math.min(m, values[j]!);
     out[i] = m;
   }
   return out;
