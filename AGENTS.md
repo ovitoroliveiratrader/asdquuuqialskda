@@ -28,3 +28,11 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- Simulated mode only: no code path places real Binance orders; market data comes from the public `data-api.binance.vision` host without keys. Why: briefing forbids real capital before validation and any key with withdrawal permission.
+- The trading engine in `src/lib/engine/` is pure and deterministic, shared by the live cycle (`/api/public/jobs/cycle`) and the browser backtest. Why: ranking numbers must be reproducible from history.
+- Indicators are window-exact (simple averages, Cutler RSI, SMA-based ATR). Why: live cycles see a recent window while backtests see long history; both must yield the same value per candle.
+- Agent params, archetype, version and capital are immutable (DB trigger); changes happen by cloning into a new version. Why: personalities must be versioned and auditable.
+- Every value the briefing left open lives in `PENDING_DECISIONS` (`src/lib/engine/config.ts`) and is flagged in the UI with `PendingMark`. Why: the owner must confirm each one.
+- The first account created becomes the owner (admin); all data reads require that role. Why: private office.
