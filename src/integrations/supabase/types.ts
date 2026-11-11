@@ -14,16 +14,293 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agents: {
+        Row: {
+          activity: string
+          archetype: string
+          cash: number
+          created_at: string
+          equity: number
+          id: string
+          initial_capital: number
+          last_cycle_at: string | null
+          lineage_id: string
+          name: string
+          notes: string | null
+          params: Json
+          parent_id: string | null
+          state: Json
+          status: string
+          symbols: string[]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          activity?: string
+          archetype: string
+          cash: number
+          created_at?: string
+          equity: number
+          id?: string
+          initial_capital: number
+          last_cycle_at?: string | null
+          lineage_id: string
+          name: string
+          notes?: string | null
+          params: Json
+          parent_id?: string | null
+          state?: Json
+          status?: string
+          symbols: string[]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          activity?: string
+          archetype?: string
+          cash?: number
+          created_at?: string
+          equity?: number
+          id?: string
+          initial_capital?: number
+          last_cycle_at?: string | null
+          lineage_id?: string
+          name?: string
+          notes?: string | null
+          params?: Json
+          parent_id?: string | null
+          state?: Json
+          status?: string
+          symbols?: string[]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agents_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cycle_runs: {
+        Row: {
+          details: Json
+          finished_at: string | null
+          id: string
+          kind: string
+          message: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          details?: Json
+          finished_at?: string | null
+          id?: string
+          kind: string
+          message?: string | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          details?: Json
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          message?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      equity_snapshots: {
+        Row: {
+          agent_id: string
+          cash: number
+          equity: number
+          id: number
+          positions_value: number
+          taken_at: string
+        }
+        Insert: {
+          agent_id: string
+          cash: number
+          equity: number
+          id?: never
+          positions_value: number
+          taken_at: string
+        }
+        Update: {
+          agent_id?: string
+          cash?: number
+          equity?: number
+          id?: never
+          positions_value?: number
+          taken_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equity_snapshots_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ranking_snapshots: {
+        Row: {
+          agent_id: string
+          days_running: number
+          equity: number
+          fees_paid: number
+          id: string
+          max_drawdown_pct: number
+          position: number
+          promotion: Json
+          return_pct: number
+          snapshot_date: string
+          taken_at: string
+          trades_count: number
+          weekly_consistency_pct: number | null
+        }
+        Insert: {
+          agent_id: string
+          days_running: number
+          equity: number
+          fees_paid: number
+          id?: string
+          max_drawdown_pct: number
+          position: number
+          promotion?: Json
+          return_pct: number
+          snapshot_date: string
+          taken_at?: string
+          trades_count: number
+          weekly_consistency_pct?: number | null
+        }
+        Update: {
+          agent_id?: string
+          days_running?: number
+          equity?: number
+          fees_paid?: number
+          id?: string
+          max_drawdown_pct?: number
+          position?: number
+          promotion?: Json
+          return_pct?: number
+          snapshot_date?: string
+          taken_at?: string
+          trades_count?: number
+          weekly_consistency_pct?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ranking_snapshots_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trades: {
+        Row: {
+          agent_id: string
+          candle_time: string
+          created_at: string
+          fee: number
+          id: string
+          indicators: Json
+          notional: number
+          price: number
+          quantity: number
+          realized_pnl: number | null
+          reason: string
+          reference_price: number
+          side: string
+          slippage_cost: number
+          symbol: string
+        }
+        Insert: {
+          agent_id: string
+          candle_time: string
+          created_at?: string
+          fee: number
+          id?: string
+          indicators?: Json
+          notional: number
+          price: number
+          quantity: number
+          realized_pnl?: number | null
+          reason: string
+          reference_price: number
+          side: string
+          slippage_cost: number
+          symbol: string
+        }
+        Update: {
+          agent_id?: string
+          candle_time?: string
+          created_at?: string
+          fee?: number
+          id?: string
+          indicators?: Json
+          notional?: number
+          price?: number
+          quantity?: number
+          realized_pnl?: number | null
+          reason?: string
+          reference_price?: number
+          side?: string
+          slippage_cost?: number
+          symbol?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trades_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +427,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
