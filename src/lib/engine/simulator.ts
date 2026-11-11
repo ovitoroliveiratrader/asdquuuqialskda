@@ -74,7 +74,7 @@ export function runAgent(input: RunInput): RunOutput {
     const candles = dedupe(raw);
     if (candles.length === 0) continue;
     if (state.lastProcessed[sym] === undefined && input.startFresh) {
-      const last = candles[candles.length - 1];
+      const last = candles[candles.length - 1]!;
       state.lastProcessed[sym] = last.openTime;
       state.lastPrices[sym] = last.close;
       continue;
@@ -82,14 +82,14 @@ export function runAgent(input: RunInput): RunOutput {
     const after = state.lastProcessed[sym] ?? -Infinity;
     const series = strategy.prepare(candles, p);
     for (let i = 0; i < candles.length; i++) {
-      if (candles[i].openTime > after) events.push({ sym, i, candles, series });
+      if (candles[i]!.openTime > after) events.push({ sym, i, candles, series });
     }
   }
 
-  events.sort((a, b) => a.candles[a.i].closeTime - b.candles[b.i].closeTime || (a.sym < b.sym ? -1 : 1));
+  events.sort((a, b) => a.candles[a.i]!.closeTime - b.candles[b.i]!.closeTime || (a.sym < b.sym ? -1 : 1));
 
   for (const ev of events) {
-    const c = ev.candles[ev.i];
+    const c = ev.candles[ev.i]!;
     const sym = ev.sym;
     state.lastPrices[sym] = c.close;
     state.lastProcessed[sym] = c.openTime;
@@ -150,8 +150,8 @@ function buy(
   const riskPerUnit = fillPrice - entry.stop;
   if (!(riskPerUnit > 0)) return null;
   const eq = markToMarket(state);
-  let qty = (eq * Number(p.riscoPorOperacao)) / riskPerUnit;
-  qty = Math.min(qty, (eq * Number(p.alocacaoMaxima)) / fillPrice, state.cash / (fillPrice * (1 + costs.feeRate)));
+  let qty = (eq * Number(p["riscoPorOperacao"])) / riskPerUnit;
+  qty = Math.min(qty, (eq * Number(p["alocacaoMaxima"])) / fillPrice, state.cash / (fillPrice * (1 + costs.feeRate)));
   qty = Math.floor(qty * 1e8) / 1e8;
   const notional = qty * fillPrice;
   if (!(notional >= costs.minNotional)) return null;
@@ -192,7 +192,7 @@ function sell(
   indicators: Record<string, number>,
   costs: SimCosts,
 ): Fill {
-  const pos = state.positions[sym];
+  const pos = state.positions[sym]!;
   const fillPrice = ref * (1 - costs.slippageRate);
   const notional = pos.qty * fillPrice;
   const fee = notional * costs.feeRate;

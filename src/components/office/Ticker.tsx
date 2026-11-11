@@ -16,7 +16,7 @@ export function Ticker() {
       </span>
       {SYMBOLS.map((s) => (
         <span key={s} className="num">
-          <span className="text-muted-foreground">{pair(s)}</span> {data ? money(data[s]) : "…"}
+          <span className="text-muted-foreground">{pair(s)}</span> {data?.[s] !== undefined ? money(data[s]) : "…"}
         </span>
       ))}
     </div>

@@ -158,7 +158,7 @@ const contrario: Strategy = {
     const sd = stdev(close, n(p, "bollingerPeriodo"));
     return {
       rsi: rsi(close, n(p, "rsiPeriodo")),
-      lower: mid.map((m, i) => m - n(p, "bollingerDesvios") * sd[i]),
+      lower: mid.map((m, i) => m - n(p, "bollingerDesvios") * sd[i]!),
       atr: atr(c.map((x) => x.high), c.map((x) => x.low), close, n(p, "atrPeriodo")),
     };
   },

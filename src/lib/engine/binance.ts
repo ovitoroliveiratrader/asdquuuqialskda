@@ -46,7 +46,7 @@ export async function fetchKlineRange(
     if (batch.length === 0) break;
     out.push(...batch);
     onProgress?.(out.length);
-    cursor = batch[batch.length - 1].openTime + 1;
+    cursor = batch[batch.length - 1]!.openTime + 1;
     if (batch.length < 1000) break;
   }
   return out;

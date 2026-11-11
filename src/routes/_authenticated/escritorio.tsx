@@ -58,11 +58,11 @@ function Office() {
   );
 }
 
-function Desk({ agent: a, trades }: { agent: Agent; trades?: Trade[] }) {
+function Desk({ agent: a, trades }: { agent: Agent; trades: Trade[] | undefined }) {
   const s = STRATEGIES[a.archetype as Archetype];
   const state = normalizeState(a.state, Number(a.initial_capital));
   const ret = Number(a.equity) / Number(a.initial_capital) - 1;
-  const act = ACTIVITY[a.activity] ?? ACTIVITY.procurando;
+  const act = ACTIVITY[a.activity] ?? { label: "Procurando entrada", dot: "bg-primary animate-blink" };
   const positions = Object.entries(state.positions);
 
   return (

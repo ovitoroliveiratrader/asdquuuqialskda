@@ -43,12 +43,12 @@ export function weeklyReturns(
   if (equity.length === 0) return [];
   const out: WeekResult[] = [];
   let prevEquity = initial;
-  let ws = weekStart(equity[0].t);
+  let ws = weekStart(equity[0]!.t);
   let idx = 0;
   while (ws + WEEK <= now) {
     let last: number | null = null;
-    while (idx < equity.length && equity[idx].t < ws + WEEK) {
-      last = equity[idx].equity;
+    while (idx < equity.length && equity[idx]!.t < ws + WEEK) {
+      last = equity[idx]!.equity;
       idx++;
     }
     const end = last ?? prevEquity;
@@ -81,7 +81,7 @@ export function computeMetrics(input: {
   closedTrades: number;
   startedAt: number;
   now: number;
-  regimes?: Record<number, Regime>;
+  regimes?: Record<number, Regime> | undefined;
 }): AgentMetrics {
   const { initialCapital: cap, now } = input;
   const series = [...input.equity, { t: now, equity: input.currentEquity }].sort((a, b) => a.t - b.t);

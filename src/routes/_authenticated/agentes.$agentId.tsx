@@ -53,7 +53,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
   const trades = useQuery(agentTradesQuery(agent.id));
   const agents = useQuery(agentsQuery);
   const parent = agents.data?.find((a) => a.id === agent.parent_id);
-  const [symbol, setSymbol] = useState(agent.symbols[0]);
+  const [symbol, setSymbol] = useState<string>(agent.symbols[0] ?? "BTCUSDT");
 
   const regimes = useQuery({
     queryKey: ["btc-weekly"],
@@ -80,8 +80,8 @@ function AgentDetail({ agent }: { agent: Agent }) {
     });
   }, [agent, equity.data, trades.data, regimes.data, state.feesPaid, state.closedTrades]);
 
-  const range = candles.data?.length ? [candles.data[0].t, candles.data[candles.data.length - 1].t] : [0, 0];
-  const inRange = (trades.data ?? []).filter((t) => t.symbol === symbol && Date.parse(t.candle_time) >= range[0]);
+  const rangeStart = candles.data?.[0]?.t ?? 0;
+  const inRange = (trades.data ?? []).filter((t) => t.symbol === symbol && Date.parse(t.candle_time) >= rangeStart);
   const buys = inRange.filter((t) => t.side === "compra").map((t) => ({ t: Date.parse(t.candle_time), price: Number(t.price) }));
   const sells = inRange.filter((t) => t.side === "venda").map((t) => ({ t: Date.parse(t.candle_time), price: Number(t.price) }));
 

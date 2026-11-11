@@ -48,7 +48,7 @@ export async function runCycle(admin: Admin, now = Date.now()) {
       ...[...pairs.values()].map((p) => fetchKlines(p.symbol, p.tf, { limit: 1000 })),
     ]);
     const candles = new Map<string, Candle[]>();
-    [...pairs.keys()].forEach((k, i) => candles.set(k, closedOnly(candleSets[i], now)));
+    [...pairs.keys()].forEach((k, i) => candles.set(k, closedOnly(candleSets[i] ?? [], now)));
 
     let fillsTotal = 0;
     const perAgent: Record<string, number> = {};

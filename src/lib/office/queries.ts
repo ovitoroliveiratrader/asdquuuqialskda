@@ -82,9 +82,9 @@ export const rankingQuery = queryOptions({
     ) as { snapshot_date: string }[];
     if (!latest.length) return { date: null as string | null, rows: [] as RankingRow[] };
     const rows = must(
-      await supabase.from("ranking_snapshots").select("*").eq("snapshot_date", latest[0].snapshot_date).order("position"),
+      await supabase.from("ranking_snapshots").select("*").eq("snapshot_date", latest[0]!.snapshot_date).order("position"),
     ) as RankingRow[];
-    return { date: latest[0].snapshot_date, rows };
+    return { date: latest[0]!.snapshot_date, rows };
   },
 });
 
