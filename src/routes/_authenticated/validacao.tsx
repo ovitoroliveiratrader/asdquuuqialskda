@@ -15,7 +15,7 @@ import { initialState, runAgent } from "@/lib/engine/simulator";
 import { STRATEGIES, TIMEFRAME_MS, type Params } from "@/lib/engine/strategies";
 import type { Archetype, Candle, EquityPoint, Fill, Timeframe } from "@/lib/engine/types";
 import { agentsQuery, type Agent } from "@/lib/office/queries";
-import { dateTimeBR, money, pair, pct, pctPlain, signClass } from "@/lib/format";
+import { dateBR, dateTimeBR, money, pair, pct, pctPlain, signClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/validacao")({
@@ -296,7 +296,7 @@ function Segment({ title, s }: { title: string; s: { returnPct: number; mdd: num
         <span className={signClass(s.returnPct)}>{pct(s.returnPct)}</span> · drawdown {pctPlain(s.mdd, 2)}
       </p>
       <p className="num mt-1 text-[11px] text-muted-foreground">
-        {dateTimeBR(s.from)} → {dateTimeBR(s.to)}
+        {dateBR(s.from)} → {dateBR(s.to)}
       </p>
     </div>
   );

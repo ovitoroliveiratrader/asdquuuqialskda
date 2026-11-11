@@ -48,7 +48,7 @@ const common: ParamField[] = [
 const paciente: Strategy = {
   archetype: "paciente",
   label: "Paciente",
-  logic: "Entra só em tendência confirmada: média rápida acima da lenta, preço acima da média longa e rompendo a máxima recente. Sai quando o preço fecha abaixo da média rápida ou no stop móvel.",
+  logic: "Entra só em tendência confirmada: média rápida acima da lenta, preço acima da média longa e rompendo a máxima recente. Sai quando o preço fecha abaixo da média lenta ou no stop móvel.",
   timeframeLabel: "4h (média longa de 300 velas ≈ 50 dias, filtro diário)",
   frequency: "Baixa",
   riskLabel: "Conservador",
