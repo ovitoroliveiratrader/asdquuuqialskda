@@ -51,14 +51,14 @@ describe("simulador", () => {
   it("patrimônio = caixa + posições a preço de mercado", () => {
     const candles = [100, 100, 100, 100, 110].map((c, i) => mk(i, c));
     const out = runAgent({ state: initialState(10_000), archetype: "seguidor", params: seguidorParams, candlesBySymbol: { BTCUSDT: candles } });
-    const pos = out.state.positions.BTCUSDT;
+    const pos = out.state.positions["BTCUSDT"]!;
     expect(markToMarket(out.state, { BTCUSDT: 120 })).toBeCloseTo(out.state.cash + pos.qty * 120, 6);
   });
 
   it("não aloca mais que a alocação máxima por par", () => {
     const candles = [100, 100, 100, 100, 110].map((c, i) => mk(i, c));
     const out = runAgent({ state: initialState(10_000), archetype: "seguidor", params: { ...seguidorParams, riscoPorOperacao: 0.05 }, candlesBySymbol: { BTCUSDT: candles } });
-    expect(out.fills[0].notional).toBeLessThanOrEqual(10_000 * 0.5 + 1e-6);
+    expect(out.fills[0]!.notional).toBeLessThanOrEqual(10_000 * 0.5 + 1e-6);
   });
 
   it("stop vende no preço do stop com deslizamento e registra lucro/prejuízo após taxas", () => {
@@ -66,8 +66,8 @@ describe("simulador", () => {
     const crash = mk(5, 90, 109, 109, 85);
     const out = runAgent({ state: initialState(10_000), archetype: "seguidor", params: seguidorParams, candlesBySymbol: { BTCUSDT: [...base, crash] } });
     const sell = out.fills.find((f) => f.side === "venda")!;
-    const buy = out.fills[0];
-    const stop = Number(buy.indicators.stop);
+    const buy = out.fills[0]!;
+    const stop = Number(buy.indicators["stop"]);
     expect(sell.referencePrice).toBeCloseTo(Math.min(109, stop), 2);
     expect(sell.price).toBeCloseTo(sell.referencePrice * 0.9995, 6);
     expect(sell.realizedPnl!).toBeCloseTo(sell.notional - sell.fee - buy.notional - buy.fee, 6);
@@ -88,7 +88,7 @@ describe("simulador", () => {
     const candles = [100, 100, 100, 100, 110].map((c, i) => mk(i, c));
     const out = runAgent({ state: initialState(10_000), archetype: "seguidor", params: seguidorParams, candlesBySymbol: { BTCUSDT: candles }, startFresh: true });
     expect(out.fills).toHaveLength(0);
-    expect(out.state.lastProcessed.BTCUSDT).toBe(4 * H);
+    expect(out.state.lastProcessed["BTCUSDT"]).toBe(4 * H);
   });
 });
 
@@ -139,6 +139,6 @@ describe("métricas e promoção", () => {
       { id: "a", name: "Arriscado", initialCapital: 100, returnPct: 0.3, maxDrawdownPct: 0.4, weeklyConsistencyPct: 0.3, feesPaid: 30 },
       { id: "b", name: "Estável", initialCapital: 100, returnPct: 0.1, maxDrawdownPct: 0.05, weeklyConsistencyPct: 0.7, feesPaid: 2 },
     ];
-    expect(rankAgents(rows)[0].id).toBe("b");
+    expect(rankAgents(rows)[0]!.id).toBe("b");
   });
 });
