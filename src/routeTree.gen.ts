@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedEscritorioRouteImport } from './routes/_authenticated/escritorio'
+import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as ApiPublicJobsCycleRouteImport } from './routes/api/public/jobs/cycle'
 
 const IndexRoute = IndexRouteImport.update({
@@ -34,6 +35,11 @@ const AuthenticatedEscritorioRoute = AuthenticatedEscritorioRouteImport.update({
   path: '/escritorio',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicJobsCycleRoute = ApiPublicJobsCycleRouteImport.update({
   id: '/api/public/jobs/cycle',
   path: '/api/public/jobs/cycle',
@@ -44,12 +50,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
+  '/ranking': typeof AuthenticatedRankingRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
+  '/ranking': typeof AuthenticatedRankingRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRoutesById {
@@ -58,19 +66,22 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/escritorio': typeof AuthenticatedEscritorioRoute
+  '/_authenticated/ranking': typeof AuthenticatedRankingRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/escritorio' | '/api/public/jobs/cycle'
+  fullPaths:
+    '/' | '/auth' | '/escritorio' | '/ranking' | '/api/public/jobs/cycle'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/escritorio' | '/api/public/jobs/cycle'
+  to: '/' | '/auth' | '/escritorio' | '/ranking' | '/api/public/jobs/cycle'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/escritorio'
+    | '/_authenticated/ranking'
     | '/api/public/jobs/cycle'
   fileRoutesById: FileRoutesById
 }
@@ -111,6 +122,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEscritorioRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/ranking': {
+      id: '/_authenticated/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof AuthenticatedRankingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/jobs/cycle': {
       id: '/api/public/jobs/cycle'
       path: '/api/public/jobs/cycle'
@@ -123,10 +141,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedEscritorioRoute: typeof AuthenticatedEscritorioRoute
+  AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEscritorioRoute: AuthenticatedEscritorioRoute,
+  AuthenticatedRankingRoute: AuthenticatedRankingRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
