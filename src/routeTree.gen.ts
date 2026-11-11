@@ -10,12 +10,29 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedEscritorioRouteImport } from './routes/_authenticated/escritorio'
 import { Route as ApiPublicJobsCycleRouteImport } from './routes/api/public/jobs/cycle'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedEscritorioRoute = AuthenticatedEscritorioRouteImport.update({
+  id: '/escritorio',
+  path: '/escritorio',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ApiPublicJobsCycleRoute = ApiPublicJobsCycleRouteImport.update({
   id: '/api/public/jobs/cycle',
@@ -25,27 +42,42 @@ const ApiPublicJobsCycleRoute = ApiPublicJobsCycleRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/escritorio': typeof AuthenticatedEscritorioRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/escritorio': typeof AuthenticatedEscritorioRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/escritorio': typeof AuthenticatedEscritorioRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/jobs/cycle'
+  fullPaths: '/' | '/auth' | '/escritorio' | '/api/public/jobs/cycle'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/jobs/cycle'
-  id: '__root__' | '/' | '/api/public/jobs/cycle'
+  to: '/' | '/auth' | '/escritorio' | '/api/public/jobs/cycle'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/escritorio'
+    | '/api/public/jobs/cycle'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
   ApiPublicJobsCycleRoute: typeof ApiPublicJobsCycleRoute
 }
 
@@ -58,6 +90,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/escritorio': {
+      id: '/_authenticated/escritorio'
+      path: '/escritorio'
+      fullPath: '/escritorio'
+      preLoaderRoute: typeof AuthenticatedEscritorioRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/jobs/cycle': {
       id: '/api/public/jobs/cycle'
       path: '/api/public/jobs/cycle'
@@ -68,8 +121,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedEscritorioRoute: typeof AuthenticatedEscritorioRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedEscritorioRoute: AuthenticatedEscritorioRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
   ApiPublicJobsCycleRoute: ApiPublicJobsCycleRoute,
 }
 export const routeTree = rootRouteImport
