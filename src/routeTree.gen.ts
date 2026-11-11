@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedEscritorioRouteImport } from './routes/_authenticated/escritorio'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
+import { Route as AuthenticatedAgentesAgentIdRouteImport } from './routes/_authenticated/agentes.$agentId'
 import { Route as ApiPublicJobsCycleRouteImport } from './routes/api/public/jobs/cycle'
 
 const IndexRoute = IndexRouteImport.update({
@@ -40,6 +41,12 @@ const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
   path: '/ranking',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAgentesAgentIdRoute =
+  AuthenticatedAgentesAgentIdRouteImport.update({
+    id: '/agentes/$agentId',
+    path: '/agentes/$agentId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicJobsCycleRoute = ApiPublicJobsCycleRouteImport.update({
   id: '/api/public/jobs/cycle',
   path: '/api/public/jobs/cycle',
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/agentes/$agentId': typeof AuthenticatedAgentesAgentIdRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRoutesByTo {
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/agentes/$agentId': typeof AuthenticatedAgentesAgentIdRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRoutesById {
@@ -67,14 +76,26 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/escritorio': typeof AuthenticatedEscritorioRoute
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
+  '/_authenticated/agentes/$agentId': typeof AuthenticatedAgentesAgentIdRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/auth' | '/escritorio' | '/ranking' | '/api/public/jobs/cycle'
+    | '/'
+    | '/auth'
+    | '/escritorio'
+    | '/ranking'
+    | '/agentes/$agentId'
+    | '/api/public/jobs/cycle'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/escritorio' | '/ranking' | '/api/public/jobs/cycle'
+  to:
+    | '/'
+    | '/auth'
+    | '/escritorio'
+    | '/ranking'
+    | '/agentes/$agentId'
+    | '/api/public/jobs/cycle'
   id:
     | '__root__'
     | '/'
@@ -82,6 +103,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/escritorio'
     | '/_authenticated/ranking'
+    | '/_authenticated/agentes/$agentId'
     | '/api/public/jobs/cycle'
   fileRoutesById: FileRoutesById
 }
@@ -129,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRankingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/agentes/$agentId': {
+      id: '/_authenticated/agentes/$agentId'
+      path: '/agentes/$agentId'
+      fullPath: '/agentes/$agentId'
+      preLoaderRoute: typeof AuthenticatedAgentesAgentIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/jobs/cycle': {
       id: '/api/public/jobs/cycle'
       path: '/api/public/jobs/cycle'
@@ -142,11 +171,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedEscritorioRoute: typeof AuthenticatedEscritorioRoute
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
+  AuthenticatedAgentesAgentIdRoute: typeof AuthenticatedAgentesAgentIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEscritorioRoute: AuthenticatedEscritorioRoute,
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
+  AuthenticatedAgentesAgentIdRoute: AuthenticatedAgentesAgentIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
