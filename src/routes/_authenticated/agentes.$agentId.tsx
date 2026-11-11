@@ -105,7 +105,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
       actions={<AgentActions agent={agent} />}
     >
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-        <div className="grid gap-5">
+        <div className="grid content-start gap-5">
           <section className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-5">
             <Kpi label="Patrimônio" value={money(Number(agent.equity))} />
             <Kpi label="Retorno" value={pct(metrics.returnPct)} className={signClass(metrics.returnPct)} />

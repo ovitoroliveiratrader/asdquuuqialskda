@@ -7,8 +7,10 @@ export function CriteriaList({ criteria }: { criteria: Criterion[] }) {
       {criteria.map((c) => (
         <li key={c.id} className="flex items-start gap-2 text-sm">
           {c.ok ? <Check className="mt-0.5 size-4 shrink-0 text-gain" /> : <X className="mt-0.5 size-4 shrink-0 text-loss" />}
-          <span className="flex-1">{c.label}</span>
-          <span className="num text-xs text-muted-foreground">{c.detail}</span>
+          <span className="flex-1">
+            {c.label}
+            <span className="num block text-xs text-muted-foreground">{c.detail}</span>
+          </span>
         </li>
       ))}
     </ul>

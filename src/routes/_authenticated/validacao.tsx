@@ -225,7 +225,7 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
             <Kpi label="Semanas positivas" value={pctPlain(r.metrics.weeklyConsistencyPct, 0)} />
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+          <div className="grid items-start gap-5 lg:grid-cols-[1fr_340px]">
             <section className="rounded-md border border-border bg-card p-5">
               <h2 className="mb-3 text-lg font-semibold">Patrimônio simulado · {r.agent.name} v{r.agent.version}</h2>
               <EquityChart data={chart} initial={INITIAL_CAPITAL} />
