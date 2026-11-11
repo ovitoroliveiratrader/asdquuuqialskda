@@ -74,7 +74,7 @@ const paciente: Strategy = {
   decide: (s, i, c, pos, p) => {
     const ind = { mediaRapida: r2(at(s, "maF", i)), mediaLenta: r2(at(s, "maS", i)), mediaLonga: r2(at(s, "maL", i)), maximaRecente: r2(at(s, "hh", i)), atr: r2(at(s, "atr", i)), fechamento: c.close };
     if (pos) {
-      if (c.close < at(s, "maF", i)) return { exit: { reason: `Fechamento ${fmt(c.close)} abaixo da média rápida ${fmt(at(s, "maF", i))}: tendência perdeu força.`, indicators: ind } };
+      if (c.close < at(s, "maS", i)) return { exit: { reason: `Fechamento ${fmt(c.close)} abaixo da média lenta ${fmt(at(s, "maS", i))}: tendência perdeu força.`, indicators: ind } };
       return { trailStop: c.close - n(p, "trailingAtr") * at(s, "atr", i) };
     }
     if (at(s, "maF", i) > at(s, "maS", i) && c.close > at(s, "maL", i) && c.close > at(s, "hh", i)) {
