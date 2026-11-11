@@ -12,8 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedDecisoesRouteImport } from './routes/_authenticated/decisoes'
 import { Route as AuthenticatedEscritorioRouteImport } from './routes/_authenticated/escritorio'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
+import { Route as AuthenticatedSalaDeDecisaoRouteImport } from './routes/_authenticated/sala-de-decisao'
+import { Route as AuthenticatedValidacaoRouteImport } from './routes/_authenticated/validacao'
 import { Route as AuthenticatedAgentesAgentIdRouteImport } from './routes/_authenticated/agentes.$agentId'
 import { Route as ApiPublicJobsCycleRouteImport } from './routes/api/public/jobs/cycle'
 
@@ -31,6 +34,11 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedDecisoesRoute = AuthenticatedDecisoesRouteImport.update({
+  id: '/decisoes',
+  path: '/decisoes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedEscritorioRoute = AuthenticatedEscritorioRouteImport.update({
   id: '/escritorio',
   path: '/escritorio',
@@ -39,6 +47,17 @@ const AuthenticatedEscritorioRoute = AuthenticatedEscritorioRouteImport.update({
 const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
   id: '/ranking',
   path: '/ranking',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSalaDeDecisaoRoute =
+  AuthenticatedSalaDeDecisaoRouteImport.update({
+    id: '/sala-de-decisao',
+    path: '/sala-de-decisao',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedValidacaoRoute = AuthenticatedValidacaoRouteImport.update({
+  id: '/validacao',
+  path: '/validacao',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAgentesAgentIdRoute =
@@ -56,16 +75,22 @@ const ApiPublicJobsCycleRoute = ApiPublicJobsCycleRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/decisoes': typeof AuthenticatedDecisoesRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/sala-de-decisao': typeof AuthenticatedSalaDeDecisaoRoute
+  '/validacao': typeof AuthenticatedValidacaoRoute
   '/agentes/$agentId': typeof AuthenticatedAgentesAgentIdRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/decisoes': typeof AuthenticatedDecisoesRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/sala-de-decisao': typeof AuthenticatedSalaDeDecisaoRoute
+  '/validacao': typeof AuthenticatedValidacaoRoute
   '/agentes/$agentId': typeof AuthenticatedAgentesAgentIdRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
@@ -74,8 +99,11 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/decisoes': typeof AuthenticatedDecisoesRoute
   '/_authenticated/escritorio': typeof AuthenticatedEscritorioRoute
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
+  '/_authenticated/sala-de-decisao': typeof AuthenticatedSalaDeDecisaoRoute
+  '/_authenticated/validacao': typeof AuthenticatedValidacaoRoute
   '/_authenticated/agentes/$agentId': typeof AuthenticatedAgentesAgentIdRoute
   '/api/public/jobs/cycle': typeof ApiPublicJobsCycleRoute
 }
@@ -84,16 +112,22 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/decisoes'
     | '/escritorio'
     | '/ranking'
+    | '/sala-de-decisao'
+    | '/validacao'
     | '/agentes/$agentId'
     | '/api/public/jobs/cycle'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/decisoes'
     | '/escritorio'
     | '/ranking'
+    | '/sala-de-decisao'
+    | '/validacao'
     | '/agentes/$agentId'
     | '/api/public/jobs/cycle'
   id:
@@ -101,8 +135,11 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/decisoes'
     | '/_authenticated/escritorio'
     | '/_authenticated/ranking'
+    | '/_authenticated/sala-de-decisao'
+    | '/_authenticated/validacao'
     | '/_authenticated/agentes/$agentId'
     | '/api/public/jobs/cycle'
   fileRoutesById: FileRoutesById
@@ -137,6 +174,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/decisoes': {
+      id: '/_authenticated/decisoes'
+      path: '/decisoes'
+      fullPath: '/decisoes'
+      preLoaderRoute: typeof AuthenticatedDecisoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/escritorio': {
       id: '/_authenticated/escritorio'
       path: '/escritorio'
@@ -149,6 +193,20 @@ declare module '@tanstack/react-router' {
       path: '/ranking'
       fullPath: '/ranking'
       preLoaderRoute: typeof AuthenticatedRankingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/sala-de-decisao': {
+      id: '/_authenticated/sala-de-decisao'
+      path: '/sala-de-decisao'
+      fullPath: '/sala-de-decisao'
+      preLoaderRoute: typeof AuthenticatedSalaDeDecisaoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/validacao': {
+      id: '/_authenticated/validacao'
+      path: '/validacao'
+      fullPath: '/validacao'
+      preLoaderRoute: typeof AuthenticatedValidacaoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/agentes/$agentId': {
@@ -169,14 +227,20 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedDecisoesRoute: typeof AuthenticatedDecisoesRoute
   AuthenticatedEscritorioRoute: typeof AuthenticatedEscritorioRoute
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
+  AuthenticatedSalaDeDecisaoRoute: typeof AuthenticatedSalaDeDecisaoRoute
+  AuthenticatedValidacaoRoute: typeof AuthenticatedValidacaoRoute
   AuthenticatedAgentesAgentIdRoute: typeof AuthenticatedAgentesAgentIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedDecisoesRoute: AuthenticatedDecisoesRoute,
   AuthenticatedEscritorioRoute: AuthenticatedEscritorioRoute,
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
+  AuthenticatedSalaDeDecisaoRoute: AuthenticatedSalaDeDecisaoRoute,
+  AuthenticatedValidacaoRoute: AuthenticatedValidacaoRoute,
   AuthenticatedAgentesAgentIdRoute: AuthenticatedAgentesAgentIdRoute,
 }
 
