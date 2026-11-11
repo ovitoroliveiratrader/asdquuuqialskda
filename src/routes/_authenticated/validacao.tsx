@@ -13,7 +13,7 @@ import { INITIAL_CAPITAL } from "@/lib/engine/config";
 import { classifyWeeks, computeMetrics, maxDrawdown } from "@/lib/engine/metrics";
 import { initialState, runAgent } from "@/lib/engine/simulator";
 import { STRATEGIES, TIMEFRAME_MS, type Params } from "@/lib/engine/strategies";
-import type { Archetype, Candle, EquityPoint, Fill } from "@/lib/engine/types";
+import type { Archetype, Candle, EquityPoint, Fill, Timeframe } from "@/lib/engine/types";
 import { agentsQuery, type Agent } from "@/lib/office/queries";
 import { dateTimeBR, money, pair, pct, pctPlain, signClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/validacao")({
   component: Validation,
 });
 
-const PERIODS: Record<string, number[]> = {
+const PERIODS: Record<Timeframe, [number, number, number]> = {
   "1m": [3, 7, 14],
   "5m": [7, 30, 60],
   "15m": [30, 90, 180],
@@ -58,15 +58,26 @@ type Result = {
 };
 
 function segment(points: EquityPoint[], startEquity: number) {
-  const end = points.length ? points[points.length - 1].equity : startEquity;
+  const end = points[points.length - 1]?.equity ?? startEquity;
   return { returnPct: end / startEquity - 1, mdd: maxDrawdown(startEquity, points) };
 }
 
 function Validation() {
   const { data: agents } = useSuspenseQuery(agentsQuery);
-  const [agentId, setAgentId] = useState(() => agents.find((a) => a.archetype === "paciente")?.id ?? agents[0]?.id);
-  const agent = agents.find((a) => a.id === agentId) ?? agents[0];
-  const tf = (agent?.params as Params | undefined)?.timeframe ?? "4h";
+  if (!agents[0]) {
+    return (
+      <Shell title="Validação histórica">
+        <p className="text-muted-foreground">Nenhum agente cadastrado.</p>
+      </Shell>
+    );
+  }
+  return <ValidationRunner agents={agents} first={agents[0]} />;
+}
+
+function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) {
+  const [agentId, setAgentId] = useState(() => agents.find((a) => a.archetype === "paciente")?.id ?? first.id);
+  const agent = agents.find((a) => a.id === agentId) ?? first;
+  const tf = (agent.params as Params).timeframe;
   const [days, setDays] = useState<number>(PERIODS[tf][1]);
   const [progress, setProgress] = useState("");
   const periods = PERIODS[tf];
@@ -95,7 +106,7 @@ function Validation() {
       const live: Record<string, number> = {};
       for (const [s, cs] of Object.entries(bySymbol)) {
         warm[s] = cs.filter((c) => c.openTime < start);
-        live[s] = warm[s].length ? warm[s][warm[s].length - 1].openTime : -Infinity;
+        live[s] = warm[s]?.[warm[s].length - 1]?.openTime ?? -Infinity;
       }
       const base = initialState(INITIAL_CAPITAL);
       base.lastProcessed = Object.fromEntries(Object.entries(live).filter(([, v]) => Number.isFinite(v)));
@@ -109,7 +120,7 @@ function Validation() {
       const splitCheck = Math.abs(b.state.cash - run.state.cash);
 
       const weekly = closedOnly(await fetchKlines("BTCUSDT", "1w", { limit: 1000 }), now);
-      const lastEq = run.equity.length ? run.equity[run.equity.length - 1].equity : INITIAL_CAPITAL;
+      const lastEq = run.equity[run.equity.length - 1]?.equity ?? INITIAL_CAPITAL;
       const metrics = computeMetrics({
         initialCapital: INITIAL_CAPITAL,
         currentEquity: lastEq,
@@ -124,7 +135,7 @@ function Validation() {
       const cut = start + (now - start) * DEV_SHARE;
       const devPts = run.equity.filter((e) => e.t < cut);
       const testPts = run.equity.filter((e) => e.t >= cut);
-      const devEnd = devPts.length ? devPts[devPts.length - 1].equity : INITIAL_CAPITAL;
+      const devEnd = devPts[devPts.length - 1]?.equity ?? INITIAL_CAPITAL;
 
       setProgress("");
       return {
@@ -159,10 +170,10 @@ function Validation() {
         <div className="grid gap-1">
           <span className="text-xs text-muted-foreground">Agente</span>
           <Select
-            value={agent?.id}
+            value={agent.id}
             onValueChange={(v) => {
               setAgentId(v);
-              const t = (agents.find((a) => a.id === v)?.params as Params).timeframe;
+              const t = (agents.find((a) => a.id === v)?.params as Params | undefined)?.timeframe ?? "4h";
               setDays(PERIODS[t][1]);
             }}
           >
@@ -192,7 +203,7 @@ function Validation() {
             ))}
           </div>
         </div>
-        <Button onClick={() => m.mutate()} disabled={m.isPending || !agent}>
+        <Button onClick={() => m.mutate()} disabled={m.isPending}>
           <FlaskConical className="size-4" /> {m.isPending ? "Rodando…" : "Rodar validação"}
         </Button>
         {progress && <span className="num text-xs text-muted-foreground">{progress}</span>}

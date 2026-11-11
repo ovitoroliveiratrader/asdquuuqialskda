@@ -41,7 +41,7 @@ function DecisionRoom() {
   const m = useMutation({
     mutationFn: () => run(),
     onSuccess: (r) => {
-      toast.success("skipped" in r ? "Um ciclo já está rodando." : `Ciclo concluído: ${r.fills} execuções.`);
+      toast.success(r.skipped ? "Um ciclo já está rodando." : `Ciclo concluído: ${r.fills} execuções.`);
       qc.invalidateQueries();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falhou"),
@@ -62,8 +62,8 @@ function DecisionRoom() {
     >
       <div className="grid gap-5">
         {[...families.values()].map((versions) => (
-          <section key={versions[0].lineage_id} className="rounded-md border border-border bg-card">
-            <h2 className="border-b border-border px-5 py-3 text-xl font-semibold">Família {versions[0].name}</h2>
+          <section key={versions[0]!.lineage_id} className="rounded-md border border-border bg-card">
+            <h2 className="border-b border-border px-5 py-3 text-xl font-semibold">Família {versions[0]!.name}</h2>
             <ul className="divide-y divide-border">
               {versions
                 .sort((a, b) => b.version - a.version)

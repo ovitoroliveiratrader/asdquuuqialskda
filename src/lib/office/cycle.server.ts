@@ -16,7 +16,9 @@ function activityOf(status: string, state: AgentState) {
   return Object.keys(state.positions).length ? ("posicionado" as const) : ("procurando" as const);
 }
 
-export async function runCycle(admin: Admin, now = Date.now()) {
+export type CycleResult = { skipped: boolean; agents: number; fills: number; rankingDate: string | null };
+
+export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleResult> {
   const recent = await admin
     .from("cycle_runs")
     .select("id, started_at")
@@ -24,7 +26,7 @@ export async function runCycle(admin: Admin, now = Date.now()) {
     .eq("status", "rodando")
     .gte("started_at", new Date(now - 4 * 60_000).toISOString())
     .limit(1);
-  if (recent.data?.length) return { skipped: true, reason: "ciclo anterior ainda rodando" };
+  if (recent.data?.length) return { skipped: true, agents: 0, fills: 0, rankingDate: null };
 
   const run = await admin.from("cycle_runs").insert({ kind: "ciclo" }).select("id").single();
   if (run.error) throw run.error;
@@ -120,7 +122,7 @@ export async function runCycle(admin: Admin, now = Date.now()) {
     // Daily ranking at 00:00 UTC (21:00 Brasília): first cycle of the UTC day takes it.
     const today = new Date(now).toISOString().slice(0, 10);
     const existing = await admin.from("ranking_snapshots").select("id").eq("snapshot_date", today).limit(1);
-    let ranking: unknown = null;
+    let ranking: { date: string; agents: number } | null = null;
     if (!existing.data?.length) ranking = await runRanking(admin, now);
 
     await admin
@@ -132,7 +134,7 @@ export async function runCycle(admin: Admin, now = Date.now()) {
         details: { perAgent, ranking } as Json,
       })
       .eq("id", runId);
-    return { agents: agents.length, fills: fillsTotal, ranking };
+    return { skipped: false, agents: agents.length, fills: fillsTotal, rankingDate: ranking?.date ?? null };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await admin.from("cycle_runs").update({ status: "erro", finished_at: new Date().toISOString(), message }).eq("id", runId);
@@ -152,7 +154,7 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
 }
 
 /** Recomputes every metric from stored history (snapshots + trades) and stores the day's board. */
-export async function runRanking(admin: Admin, now = Date.now()) {
+export async function runRanking(admin: Admin, now = Date.now()): Promise<{ date: string; agents: number }> {
   const { data: agents, error } = await admin.from("agents").select("*").neq("status", "arquivado");
   if (error) throw error;
   const weekly = await fetchKlines("BTCUSDT", "1w", { limit: 200 });
