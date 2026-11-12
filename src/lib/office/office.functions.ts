@@ -4,31 +4,59 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { INITIAL_CAPITAL } from "@/lib/engine/config";
 import { initialState, normalizeState } from "@/lib/engine/simulator";
-import { STRATEGIES, type Params } from "@/lib/engine/strategies";
+import { DEFAULT_PARAMS, STRATEGIES, type Params } from "@/lib/engine/strategies";
 import type { Archetype } from "@/lib/engine/types";
 
-type Ctx = { supabase: import("@supabase/supabase-js").SupabaseClient<import("@/integrations/supabase/types").Database>; userId: string };
+type Ctx = {
+  supabase: import("@supabase/supabase-js").SupabaseClient<
+    import("@/integrations/supabase/types").Database
+  >;
+  userId: string;
+};
+
+/** Quantitative cohort for the new EMA/ATR/volume/MTF operating rules. */
+export const QUANTITATIVE_AGENT_BLUEPRINTS = [
+  { name: "Vitor", archetype: "paciente" },
+  { name: "Camila", archetype: "seguidor" },
+  { name: "Jade", archetype: "contrario" },
+  { name: "Timoteo", archetype: "relampago" },
+] as const;
+const QUANTITATIVE_MARKER = "coorte-quantitativa-2026-11";
 
 async function assertOwner(ctx: Ctx) {
-  const { data, error } = await ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
+  const { data, error } = await ctx.supabase.rpc("has_role", {
+    _user_id: ctx.userId,
+    _role: "admin",
+  });
   if (error || !data) throw new Error("Somente o dono do escritório pode fazer isso.");
 }
 
 export const setAgentStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ agentId: z.string().uuid(), status: z.enum(["ativo", "pausado", "arquivado"]) }).parse(input),
+    z
+      .object({ agentId: z.string().uuid(), status: z.enum(["ativo", "pausado", "arquivado"]) })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     await assertOwner(context);
-    const { data: agent, error } = await context.supabase.from("agents").select("*").eq("id", data.agentId).single();
+    const { data: agent, error } = await context.supabase
+      .from("agents")
+      .select("*")
+      .eq("id", data.agentId)
+      .single();
     if (error || !agent) throw new Error("Agente não encontrado.");
-    if (agent.status === "arquivado") throw new Error("Agente arquivado não volta a operar. Clone para criar uma nova versão.");
+    if (agent.status === "arquivado")
+      throw new Error("Agente arquivado não volta a operar. Clone para criar uma nova versão.");
 
     const state = normalizeState(agent.state, Number(agent.initial_capital));
-    // Resuming never trades the candles missed while paused.
     if (data.status === "ativo" && agent.status === "pausado") state.lastProcessed = {};
-    const activity = data.status === "ativo" ? (Object.keys(state.positions).length ? "posicionado" : "procurando") : "pausado";
+    const activity =
+      data.status === "ativo"
+        ? Object.keys(state.positions).length
+          ? "posicionado"
+          : "procurando"
+        : "pausado";
 
     const upd = await context.supabase
       .from("agents")
@@ -52,7 +80,11 @@ export const cloneAgent = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertOwner(context);
-    const { data: src, error } = await context.supabase.from("agents").select("*").eq("id", data.agentId).single();
+    const { data: src, error } = await context.supabase
+      .from("agents")
+      .select("*")
+      .eq("id", data.agentId)
+      .single();
     if (error || !src) throw new Error("Agente de origem não encontrado.");
 
     const strategy = STRATEGIES[src.archetype as Archetype];
@@ -60,7 +92,8 @@ export const cloneAgent = createServerFn({ method: "POST" })
     const params: Params = { ...old };
     for (const f of strategy.fields) {
       const v = Number(data.params[f.key]);
-      if (!Number.isFinite(v) || v < f.min || v > f.max) throw new Error(`${f.label}: valor fora do intervalo ${f.min} a ${f.max}.`);
+      if (!Number.isFinite(v) || v < f.min || v > f.max)
+        throw new Error(`${f.label}: valor fora do intervalo ${f.min} a ${f.max}.`);
       params[f.key] = f.kind === "int" ? Math.round(v) : v;
     }
 
@@ -92,6 +125,49 @@ export const cloneAgent = createServerFn({ method: "POST" })
       .single();
     if (ins.error) throw new Error(ins.error.message);
     return { id: ins.data.id, version };
+  });
+
+/** Creates the named quantitative cohort once; repeated calls are safe. */
+export const createQuantitativeAgents = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertOwner(context);
+    const { data: existing, error: existingError } = await context.supabase
+      .from("agents")
+      .select("id,name,version,notes")
+      .ilike("notes", `%${QUANTITATIVE_MARKER}%`);
+    if (existingError) throw new Error(existingError.message);
+
+    const created: { id: string; name: string; version: number }[] = [];
+    for (const blueprint of QUANTITATIVE_AGENT_BLUEPRINTS) {
+      const found = existing?.find((a) => a.name === blueprint.name);
+      if (found) {
+        created.push({ id: found.id, name: found.name, version: found.version });
+        continue;
+      }
+      const params = DEFAULT_PARAMS[blueprint.archetype];
+      const ins = await context.supabase
+        .from("agents")
+        .insert({
+          lineage_id: crypto.randomUUID(),
+          version: 1,
+          name: blueprint.name,
+          archetype: blueprint.archetype,
+          params: params as Json,
+          symbols: ["BTCUSDT", "ETHUSDT"],
+          initial_capital: INITIAL_CAPITAL,
+          state: initialState(INITIAL_CAPITAL) as unknown as Json,
+          equity: INITIAL_CAPITAL,
+          cash: INITIAL_CAPITAL,
+          notes: `${QUANTITATIVE_MARKER}: criado para testar as novas tendências, filtros MTF/ATR e formas de operação quantitativas.`,
+        })
+        .select("id,name,version")
+        .single();
+      if (ins.error)
+        throw new Error(`Não foi possível criar ${blueprint.name}: ${ins.error.message}`);
+      created.push(ins.data);
+    }
+    return { created, marker: QUANTITATIVE_MARKER };
   });
 
 export const runCycleNow = createServerFn({ method: "POST" })

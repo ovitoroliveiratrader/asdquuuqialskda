@@ -1,12 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { Shell } from "@/components/office/Shell";
+import { Button } from "@/components/ui/button";
 import { Ticker } from "@/components/office/Ticker";
 import { PendingMark } from "@/components/office/PendingMark";
 import { normalizeState } from "@/lib/engine/simulator";
 import { STRATEGIES, type Params } from "@/lib/engine/strategies";
 import type { Archetype } from "@/lib/engine/types";
 import { agentsQuery, lastTradesQuery, type Agent, type Trade } from "@/lib/office/queries";
+import {
+  createQuantitativeAgents,
+  QUANTITATIVE_AGENT_BLUEPRINTS,
+} from "@/lib/office/office.functions";
 import { dateTimeBR, money, pair, pct, qty, relative, signClass, usd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -14,9 +21,15 @@ export const Route = createFileRoute("/_authenticated/escritorio")({
   head: () => ({
     meta: [
       { title: "Escritório · Mesas dos agentes" },
-      { name: "description", content: "Uma mesa por agente: estado atual, patrimônio virtual e últimas operações." },
+      {
+        name: "description",
+        content: "Uma mesa por agente: estado atual, patrimônio virtual e últimas operações.",
+      },
       { property: "og:title", content: "Escritório · Mesas dos agentes" },
-      { property: "og:description", content: "Uma mesa por agente: estado atual, patrimônio virtual e últimas operações." },
+      {
+        property: "og:description",
+        content: "Uma mesa por agente: estado atual, patrimônio virtual e últimas operações.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -46,15 +59,56 @@ function Office() {
           <PendingMark id="pares" /> com taxa e deslizamento simulados.
         </>
       }
-      actions={<Ticker />}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <CreateQuantitativeAgentsButton agents={agents} />
+          <Ticker />
+        </div>
+      }
     >
       <div className="grid gap-5 md:grid-cols-2">
         {desks.map((a) => (
           <Desk key={a.id} agent={a} trades={trades.data?.[a.id]} />
         ))}
       </div>
-      {desks.length === 0 && <p className="text-muted-foreground">Nenhum agente ativo. Clone um agente arquivado na sala de decisão.</p>}
+      {desks.length === 0 && (
+        <p className="text-muted-foreground">
+          Nenhum agente ativo. Clone um agente arquivado na sala de decisão.
+        </p>
+      )}
     </Shell>
+  );
+}
+
+function CreateQuantitativeAgentsButton({ agents }: { agents: Agent[] }) {
+  const queryClient = useQueryClient();
+  const create = useServerFn(createQuantitativeAgents);
+  const mutation = useMutation({
+    mutationFn: () => create({ data: undefined }),
+    onSuccess: (result) => {
+      toast.success(`Coorte quantitativa pronta: ${result.created.map((a) => a.name).join(", ")}.`);
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Não foi possível criar os agentes."),
+  });
+  const ready = QUANTITATIVE_AGENT_BLUEPRINTS.every((b) =>
+    agents.some((a) => a.name === b.name && a.notes?.includes("coorte-quantitativa-2026-11")),
+  );
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={ready || mutation.isPending}
+      onClick={() => mutation.mutate()}
+    >
+      {ready
+        ? "Coorte quantitativa criada"
+        : mutation.isPending
+          ? "Criando agentes…"
+          : "Criar coorte quantitativa"}
+    </Button>
   );
 }
 
@@ -62,7 +116,10 @@ function Desk({ agent: a, trades }: { agent: Agent; trades: Trade[] | undefined 
   const s = STRATEGIES[a.archetype as Archetype];
   const state = normalizeState(a.state, Number(a.initial_capital));
   const ret = Number(a.equity) / Number(a.initial_capital) - 1;
-  const act = ACTIVITY[a.activity] ?? { label: "Procurando entrada", dot: "bg-primary animate-blink" };
+  const act = ACTIVITY[a.activity] ?? {
+    label: "Procurando entrada",
+    dot: "bg-primary animate-blink",
+  };
   const positions = Object.entries(state.positions);
 
   return (
@@ -92,7 +149,9 @@ function Desk({ agent: a, trades }: { agent: Agent; trades: Trade[] | undefined 
         <div className="mx-5 mb-3 rounded-sm bg-muted px-3 py-2 text-xs">
           {positions.map(([sym, p]) => (
             <div key={sym} className="num flex justify-between">
-              <span>{pair(sym)} · {qty(p.qty)} @ {money(p.entryPrice)}</span>
+              <span>
+                {pair(sym)} · {qty(p.qty)} @ {money(p.entryPrice)}
+              </span>
               <span className="text-muted-foreground">stop {money(p.stop)}</span>
             </div>
           ))}
@@ -100,20 +159,39 @@ function Desk({ agent: a, trades }: { agent: Agent; trades: Trade[] | undefined 
       )}
 
       <div className="border-t border-border px-5 py-3">
-        <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Últimas três operações</p>
+        <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          Últimas três operações
+        </p>
         {!trades ? (
           <p className="text-xs text-muted-foreground">Carregando…</p>
         ) : trades.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            Nenhuma operação ainda{a.last_cycle_at ? ` · último ciclo ${relative(a.last_cycle_at)}` : " · aguardando o primeiro ciclo"}.
+            Nenhuma operação ainda
+            {a.last_cycle_at
+              ? ` · último ciclo ${relative(a.last_cycle_at)}`
+              : " · aguardando o primeiro ciclo"}
+            .
           </p>
         ) : (
           <ul className="grid gap-1">
             {trades.map((t) => (
               <li key={t.id} className="num flex items-center justify-between gap-3 text-xs">
-                <span className={cn("w-14 font-semibold uppercase", t.side === "compra" ? "text-gain" : "text-loss")}>{t.side}</span>
-                <span className="flex-1">{pair(t.symbol)} @ {money(Number(t.price))}</span>
-                {t.realized_pnl !== null && <span className={signClass(Number(t.realized_pnl))}>{money(Number(t.realized_pnl))}</span>}
+                <span
+                  className={cn(
+                    "w-14 font-semibold uppercase",
+                    t.side === "compra" ? "text-gain" : "text-loss",
+                  )}
+                >
+                  {t.side}
+                </span>
+                <span className="flex-1">
+                  {pair(t.symbol)} @ {money(Number(t.price))}
+                </span>
+                {t.realized_pnl !== null && (
+                  <span className={signClass(Number(t.realized_pnl))}>
+                    {money(Number(t.realized_pnl))}
+                  </span>
+                )}
                 <span className="text-muted-foreground">{dateTimeBR(t.candle_time)}</span>
               </li>
             ))}
@@ -124,7 +202,17 @@ function Desk({ agent: a, trades }: { agent: Agent; trades: Trade[] | undefined 
   );
 }
 
-function Stat({ label, value, sub, className }: { label: string; value: string; sub?: string; className?: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+  className,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  className?: string;
+}) {
   return (
     <div>
       <p className="text-[11px] text-muted-foreground">{label}</p>
