@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedDecisoesRouteImport } from './routes/_authenticated/decisoes'
 import { Route as AuthenticatedEscritorioRouteImport } from './routes/_authenticated/escritorio'
+import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as AuthenticatedSalaDeDecisaoRouteImport } from './routes/_authenticated/sala-de-decisao'
 import { Route as AuthenticatedValidacaoRouteImport } from './routes/_authenticated/validacao'
@@ -42,6 +43,11 @@ const AuthenticatedDecisoesRoute = AuthenticatedDecisoesRouteImport.update({
 const AuthenticatedEscritorioRoute = AuthenticatedEscritorioRouteImport.update({
   id: '/escritorio',
   path: '/escritorio',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHistoricoRoute = AuthenticatedHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/decisoes': typeof AuthenticatedDecisoesRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
+  '/historico': typeof AuthenticatedHistoricoRoute
   '/ranking': typeof AuthenticatedRankingRoute
   '/sala-de-decisao': typeof AuthenticatedSalaDeDecisaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/decisoes': typeof AuthenticatedDecisoesRoute
   '/escritorio': typeof AuthenticatedEscritorioRoute
+  '/historico': typeof AuthenticatedHistoricoRoute
   '/ranking': typeof AuthenticatedRankingRoute
   '/sala-de-decisao': typeof AuthenticatedSalaDeDecisaoRoute
   '/validacao': typeof AuthenticatedValidacaoRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/decisoes': typeof AuthenticatedDecisoesRoute
   '/_authenticated/escritorio': typeof AuthenticatedEscritorioRoute
+  '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
   '/_authenticated/sala-de-decisao': typeof AuthenticatedSalaDeDecisaoRoute
   '/_authenticated/validacao': typeof AuthenticatedValidacaoRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/decisoes'
     | '/escritorio'
+    | '/historico'
     | '/ranking'
     | '/sala-de-decisao'
     | '/validacao'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/decisoes'
     | '/escritorio'
+    | '/historico'
     | '/ranking'
     | '/sala-de-decisao'
     | '/validacao'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/decisoes'
     | '/_authenticated/escritorio'
+    | '/_authenticated/historico'
     | '/_authenticated/ranking'
     | '/_authenticated/sala-de-decisao'
     | '/_authenticated/validacao'
@@ -188,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEscritorioRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/historico': {
+      id: '/_authenticated/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof AuthenticatedHistoricoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/ranking': {
       id: '/_authenticated/ranking'
       path: '/ranking'
@@ -229,6 +248,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDecisoesRoute: typeof AuthenticatedDecisoesRoute
   AuthenticatedEscritorioRoute: typeof AuthenticatedEscritorioRoute
+  AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
   AuthenticatedSalaDeDecisaoRoute: typeof AuthenticatedSalaDeDecisaoRoute
   AuthenticatedValidacaoRoute: typeof AuthenticatedValidacaoRoute
@@ -238,6 +258,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDecisoesRoute: AuthenticatedDecisoesRoute,
   AuthenticatedEscritorioRoute: AuthenticatedEscritorioRoute,
+  AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
   AuthenticatedSalaDeDecisaoRoute: AuthenticatedSalaDeDecisaoRoute,
   AuthenticatedValidacaoRoute: AuthenticatedValidacaoRoute,

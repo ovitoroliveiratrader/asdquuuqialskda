@@ -11,6 +11,7 @@ import { relative } from "@/lib/format";
 
 const NAV = [
   { to: "/escritorio", label: "Escritório" },
+  { to: "/historico", label: "Histórico" },
   { to: "/ranking", label: "Ranking" },
   { to: "/sala-de-decisao", label: "Sala de decisão" },
   { to: "/validacao", label: "Validação" },

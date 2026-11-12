@@ -94,3 +94,17 @@ export const cyclesQuery = queryOptions({
     must(await supabase.from("cycle_runs").select("*").order("started_at", { ascending: false }).limit(20)) as CycleRun[],
   refetchInterval: 60_000,
 });
+
+export const allTradesQuery = queryOptions({
+  queryKey: ["all-trades"],
+  queryFn: async () =>
+    must(await supabase.from("trades").select("*").order("candle_time", { ascending: false }).order("created_at", { ascending: false }).limit(1000)) as Trade[],
+  refetchInterval: 60_000,
+});
+
+export const diaryQuery = queryOptions({
+  queryKey: ["diary"],
+  queryFn: async () =>
+    must(await supabase.from("cycle_runs").select("*").eq("kind", "ciclo").order("started_at", { ascending: false }).limit(60)) as CycleRun[],
+  refetchInterval: 60_000,
+});

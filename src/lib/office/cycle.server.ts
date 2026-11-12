@@ -3,7 +3,7 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import { closedOnly, fetchKlines, fetchPrices } from "@/lib/engine/binance";
 import { classifyWeeks, computeMetrics, rankAgents } from "@/lib/engine/metrics";
 import { markToMarket, normalizeState, positionsValue, runAgent } from "@/lib/engine/simulator";
-import type { Params } from "@/lib/engine/strategies";
+import { STRATEGIES, type Params } from "@/lib/engine/strategies";
 import type { AgentState, Archetype, Candle, Timeframe } from "@/lib/engine/types";
 
 type Admin = SupabaseClient<Database>;
@@ -54,13 +54,16 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
 
     let fillsTotal = 0;
     const perAgent: Record<string, number> = {};
+    const diary: DiaryEntry[] = [];
 
     for (const a of agents) {
       let state = normalizeState(a.state, Number(a.initial_capital));
       if (a.status === "ativo") {
         const p = a.params as Params;
         const bySymbol = Object.fromEntries(a.symbols.map((s) => [s, candles.get(`${s}:${p.timeframe}`) ?? []]));
+        const before = { ...state.lastProcessed };
         const out = runAgent({ state, archetype: a.archetype as Archetype, params: p, candlesBySymbol: bySymbol, startFresh: true });
+        diary.push(...describe(a, p, bySymbol, before, out.state, out.fills));
         state = out.state;
         if (out.fills.length) {
           const ins = await admin.from("trades").insert(
@@ -131,7 +134,7 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
         status: "ok",
         finished_at: new Date().toISOString(),
         message: `${agents.length} agentes, ${fillsTotal} execuções`,
-        details: { perAgent, ranking } as Json,
+        details: { perAgent, ranking, diary } as unknown as Json,
       })
       .eq("id", runId);
     return { skipped: false, agents: agents.length, fills: fillsTotal, rankingDate: ranking?.date ?? null };
@@ -140,6 +143,59 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
     await admin.from("cycle_runs").update({ status: "erro", finished_at: new Date().toISOString(), message }).eq("id", runId);
     throw e;
   }
+}
+
+export type DiaryEntry = {
+  agentId: string;
+  agent: string;
+  symbol: string;
+  timeframe: string;
+  candleTime: number | null;
+  close: number | null;
+  outcome: "nova_vela" | "sem_vela_nova" | "inicio" | "aquecendo";
+  position: { entry: number; stop: number; target: number | null } | null;
+  indicators: Record<string, number>;
+  actions: { side: string; price: number; reason: string }[];
+};
+
+/** Human-readable snapshot of what each agent saw this cycle, including cycles without orders. */
+function describe(
+  a: AgentRow,
+  p: Params,
+  bySymbol: Record<string, Candle[]>,
+  before: Record<string, number>,
+  after: AgentState,
+  fills: { symbol: string; side: string; price: number; reason: string }[],
+): DiaryEntry[] {
+  const strategy = STRATEGIES[a.archetype as Archetype];
+  return a.symbols.map((sym) => {
+    const candles = bySymbol[sym] ?? [];
+    const last = candles[candles.length - 1];
+    const i = candles.length - 1;
+    const indicators: Record<string, number> = {};
+    if (last && i >= strategy.warmup(p)) {
+      const series = strategy.prepare(candles, p);
+      for (const [k, v] of Object.entries(series)) {
+        const x = v[i];
+        if (typeof x === "number" && Number.isFinite(x)) indicators[k] = Math.round(x * 100) / 100;
+      }
+    }
+    const pos = after.positions[sym];
+    const outcome: DiaryEntry["outcome"] =
+      before[sym] === undefined ? "inicio" : before[sym] === after.lastProcessed[sym] ? "sem_vela_nova" : last && i < strategy.warmup(p) ? "aquecendo" : "nova_vela";
+    return {
+      agentId: a.id,
+      agent: `${a.name} v${a.version}`,
+      symbol: sym,
+      timeframe: p.timeframe,
+      candleTime: last?.openTime ?? null,
+      close: last?.close ?? null,
+      outcome,
+      position: pos ? { entry: pos.entryPrice, stop: pos.stop, target: pos.target } : null,
+      indicators,
+      actions: fills.filter((f) => f.symbol === sym).map((f) => ({ side: f.side, price: f.price, reason: f.reason })),
+    };
+  });
 }
 
 async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
