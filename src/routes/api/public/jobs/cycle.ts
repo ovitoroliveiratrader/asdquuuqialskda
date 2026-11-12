@@ -14,8 +14,8 @@ export const Route = createFileRoute("/api/public/jobs/cycle")({
           const result = await runCycle(supabaseAdmin);
           return Response.json({ ok: true, result });
         } catch (e) {
-          console.error(e);
-          return Response.json({ ok: false, error: e instanceof Error ? e.message : "erro" }, { status: 500 });
+          console.error("Falha no ciclo agendado", e);
+          return Response.json({ ok: false, error: "cycle_failed" }, { status: 500 });
         }
       },
     },

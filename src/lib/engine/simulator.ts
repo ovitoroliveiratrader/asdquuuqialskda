@@ -1,6 +1,6 @@
 import { FEE_RATE, MIN_NOTIONAL, SLIPPAGE_RATE } from "./config";
 import { STRATEGIES, type Params } from "./strategies";
-import type { AgentState, Archetype, Candle, EquityPoint, Fill } from "./types";
+import type { AgentState, Archetype, Candle, EquityPoint, Fill, PendingEntry } from "./types";
 
 export type SimCosts = { feeRate: number; slippageRate: number; minNotional: number };
 export const DEFAULT_COSTS: SimCosts = {
@@ -10,7 +10,15 @@ export const DEFAULT_COSTS: SimCosts = {
 };
 
 export function initialState(capital: number): AgentState {
-  return { cash: capital, positions: {}, lastProcessed: {}, lastPrices: {}, feesPaid: 0, closedTrades: 0 };
+  return {
+    cash: capital,
+    positions: {},
+    pendingEntries: {},
+    lastProcessed: {},
+    lastPrices: {},
+    feesPaid: 0,
+    closedTrades: 0,
+  };
 }
 
 /** Accepts a stored JSON state and fills any missing fields. */
@@ -21,6 +29,7 @@ export function normalizeState(raw: unknown, capital: number): AgentState {
   return {
     cash: typeof s.cash === "number" ? s.cash : base.cash,
     positions: s.positions ?? {},
+    pendingEntries: s.pendingEntries ?? {},
     lastProcessed: s.lastProcessed ?? {},
     lastPrices: s.lastPrices ?? {},
     feesPaid: s.feesPaid ?? 0,
@@ -28,9 +37,13 @@ export function normalizeState(raw: unknown, capital: number): AgentState {
   };
 }
 
-export function positionsValue(state: AgentState, prices: Record<string, number> = state.lastPrices) {
+export function positionsValue(
+  state: AgentState,
+  prices: Record<string, number> = state.lastPrices,
+) {
   let v = 0;
-  for (const [sym, p] of Object.entries(state.positions)) v += p.qty * (prices[sym] ?? p.entryPrice);
+  for (const [sym, p] of Object.entries(state.positions))
+    v += p.qty * (prices[sym] ?? p.entryPrice);
   return v;
 }
 
@@ -57,6 +70,9 @@ export type RunOutput = { state: AgentState; fills: Fill[]; equity: EquityPoint[
 /**
  * Deterministic engine step. Given the same state, parameters and candles it
  * always returns the same fills, so live cycles and backtests share one code path.
+ * Signals are produced from a closed candle and entries are filled on the next
+ * available candle open. This avoids granting a strategy execution at a price
+ * that was only known after the candle had already closed.
  */
 export function runAgent(input: RunInput): RunOutput {
   const costs = input.costs ?? DEFAULT_COSTS;
@@ -86,7 +102,9 @@ export function runAgent(input: RunInput): RunOutput {
     }
   }
 
-  events.sort((a, b) => a.candles[a.i]!.closeTime - b.candles[b.i]!.closeTime || (a.sym < b.sym ? -1 : 1));
+  events.sort(
+    (a, b) => a.candles[a.i]!.closeTime - b.candles[b.i]!.closeTime || (a.sym < b.sym ? -1 : 1),
+  );
 
   for (const ev of events) {
     const c = ev.candles[ev.i]!;
@@ -96,16 +114,43 @@ export function runAgent(input: RunInput): RunOutput {
 
     if (ev.i >= warmup) {
       let exitedNow = false;
+      const pending = state.pendingEntries[sym];
+      if (pending && pending.signalCandleTime < c.openTime && !state.positions[sym]) {
+        const f = buy(state, sym, c, pending, p, costs);
+        if (f) fills.push(f);
+        delete state.pendingEntries[sym];
+      }
+
       const pos = state.positions[sym];
 
       if (pos && pos.openedAt < c.openTime) {
         if (c.low <= pos.stop) {
           const ref = Math.min(c.open, pos.stop);
-          fills.push(sell(state, sym, ref, c.openTime, `Stop atingido em ${ref.toFixed(2)}.`, { stop: pos.stop, minima: c.low }, costs));
+          fills.push(
+            sell(
+              state,
+              sym,
+              ref,
+              c.openTime,
+              `Stop atingido em ${ref.toFixed(2)}.`,
+              { stop: pos.stop, minima: c.low },
+              costs,
+            ),
+          );
           exitedNow = true;
         } else if (pos.target !== null && c.high >= pos.target) {
           const ref = Math.max(c.open, pos.target);
-          fills.push(sell(state, sym, ref, c.openTime, `Alvo de lucro atingido em ${ref.toFixed(2)}.`, { alvo: pos.target, maxima: c.high }, costs));
+          fills.push(
+            sell(
+              state,
+              sym,
+              ref,
+              c.openTime,
+              `Alvo de lucro atingido em ${ref.toFixed(2)}.`,
+              { alvo: pos.target, maxima: c.high },
+              costs,
+            ),
+          );
           exitedNow = true;
         }
       }
@@ -114,15 +159,19 @@ export function runAgent(input: RunInput): RunOutput {
       const signal = strategy.decide(ev.series, ev.i, c, open ?? null, p);
 
       if (open && signal.exit) {
-        fills.push(sell(state, sym, c.close, c.openTime, signal.exit.reason, signal.exit.indicators, costs));
+        fills.push(
+          sell(state, sym, c.close, c.openTime, signal.exit.reason, signal.exit.indicators, costs),
+        );
         exitedNow = true;
       } else if (open && signal.trailStop !== undefined && signal.trailStop > open.stop) {
         open.stop = signal.trailStop;
       }
 
       if (!state.positions[sym] && !exitedNow && signal.entry) {
-        const f = buy(state, sym, c, signal.entry, p, costs);
-        if (f) fills.push(f);
+        state.pendingEntries[sym] = {
+          ...signal.entry,
+          signalCandleTime: c.openTime,
+        };
       }
     }
 
@@ -142,16 +191,20 @@ function buy(
   state: AgentState,
   sym: string,
   c: Candle,
-  entry: NonNullable<ReturnType<(typeof STRATEGIES)["paciente"]["decide"]>["entry"]>,
+  entry: PendingEntry,
   p: Params,
   costs: SimCosts,
 ): Fill | null {
-  const fillPrice = c.close * (1 + costs.slippageRate);
+  const fillPrice = c.open * (1 + costs.slippageRate);
   const riskPerUnit = fillPrice - entry.stop;
   if (!(riskPerUnit > 0)) return null;
   const eq = markToMarket(state);
   let qty = (eq * Number(p["riscoPorOperacao"])) / riskPerUnit;
-  qty = Math.min(qty, (eq * Number(p["alocacaoMaxima"])) / fillPrice, state.cash / (fillPrice * (1 + costs.feeRate)));
+  qty = Math.min(
+    qty,
+    (eq * Number(p["alocacaoMaxima"])) / fillPrice,
+    state.cash / (fillPrice * (1 + costs.feeRate)),
+  );
   qty = Math.floor(qty * 1e8) / 1e8;
   const notional = qty * fillPrice;
   if (!(notional >= costs.minNotional)) return null;
@@ -171,11 +224,11 @@ function buy(
     symbol: sym,
     side: "compra",
     price: fillPrice,
-    referencePrice: c.close,
+    referencePrice: c.open,
     quantity: qty,
     notional,
     fee,
-    slippageCost: (fillPrice - c.close) * qty,
+    slippageCost: (fillPrice - c.open) * qty,
     realizedPnl: null,
     reason: entry.reason,
     indicators: { ...entry.indicators, stop: Math.round(entry.stop * 100) / 100 },

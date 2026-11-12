@@ -10,30 +10,66 @@ type Admin = SupabaseClient<Database>;
 type AgentRow = Database["public"]["Tables"]["agents"]["Row"];
 
 const SNAPSHOT_EVERY_MS = 55 * 60_000;
+// Prevents overlapping invocations within one worker. A database-level lock is
+// still required when more than one server instance can execute the cron.
+let localCycleInFlight = false;
 
 function activityOf(status: string, state: AgentState) {
   if (status === "pausado") return "pausado" as const;
   return Object.keys(state.positions).length ? ("posicionado" as const) : ("procurando" as const);
 }
 
-export type CycleResult = { skipped: boolean; agents: number; fills: number; rankingDate: string | null };
+export type CycleResult = {
+  skipped: boolean;
+  agents: number;
+  fills: number;
+  rankingDate: string | null;
+};
 
 export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleResult> {
-  const recent = await admin
-    .from("cycle_runs")
-    .select("id, started_at")
-    .eq("kind", "ciclo")
-    .eq("status", "rodando")
-    .gte("started_at", new Date(now - 4 * 60_000).toISOString())
-    .limit(1);
-  if (recent.data?.length) return { skipped: true, agents: 0, fills: 0, rankingDate: null };
+  if (localCycleInFlight) return { skipped: true, agents: 0, fills: 0, rankingDate: null };
+  localCycleInFlight = true;
 
-  const run = await admin.from("cycle_runs").insert({ kind: "ciclo" }).select("id").single();
-  if (run.error) throw run.error;
+  let recent;
+  try {
+    recent = await admin
+      .from("cycle_runs")
+      .select("id, started_at")
+      .eq("kind", "ciclo")
+      .eq("status", "rodando")
+      .gte("started_at", new Date(now - 4 * 60_000).toISOString())
+      .limit(1);
+  } catch (error) {
+    localCycleInFlight = false;
+    throw error;
+  }
+  if (recent.error) {
+    localCycleInFlight = false;
+    throw recent.error;
+  }
+  if (recent.data?.length) {
+    localCycleInFlight = false;
+    return { skipped: true, agents: 0, fills: 0, rankingDate: null };
+  }
+
+  let run;
+  try {
+    run = await admin.from("cycle_runs").insert({ kind: "ciclo" }).select("id").single();
+  } catch (error) {
+    localCycleInFlight = false;
+    throw error;
+  }
+  if (run.error) {
+    localCycleInFlight = false;
+    throw run.error;
+  }
   const runId = run.data.id;
 
   try {
-    const { data: agents, error } = await admin.from("agents").select("*").neq("status", "arquivado");
+    const { data: agents, error } = await admin
+      .from("agents")
+      .select("*")
+      .neq("status", "arquivado");
     if (error) throw error;
 
     const pairs = new Map<string, { symbol: string; tf: Timeframe }>();
@@ -46,7 +82,9 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
     }
 
     const [prices, ...candleSets] = await Promise.all([
-      allSymbols.size ? fetchPrices([...allSymbols]) : Promise.resolve({} as Record<string, number>),
+      allSymbols.size
+        ? fetchPrices([...allSymbols])
+        : Promise.resolve({} as Record<string, number>),
       ...[...pairs.values()].map((p) => fetchKlines(p.symbol, p.tf, { limit: 1000 })),
     ]);
     const candles = new Map<string, Candle[]>();
@@ -60,9 +98,17 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
       let state = normalizeState(a.state, Number(a.initial_capital));
       if (a.status === "ativo") {
         const p = a.params as Params;
-        const bySymbol = Object.fromEntries(a.symbols.map((s) => [s, candles.get(`${s}:${p.timeframe}`) ?? []]));
+        const bySymbol = Object.fromEntries(
+          a.symbols.map((s) => [s, candles.get(`${s}:${p.timeframe}`) ?? []]),
+        );
         const before = { ...state.lastProcessed };
-        const out = runAgent({ state, archetype: a.archetype as Archetype, params: p, candlesBySymbol: bySymbol, startFresh: true });
+        const out = runAgent({
+          state,
+          archetype: a.archetype as Archetype,
+          params: p,
+          candlesBySymbol: bySymbol,
+          startFresh: true,
+        });
         diary.push(...describe(a, p, bySymbol, before, out.state, out.fills));
         state = out.state;
         if (out.fills.length) {
@@ -86,7 +132,7 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
           if (ins.error) throw ins.error;
         }
         fillsTotal += out.fills.length;
-        perAgent[a.name] = out.fills.length;
+        perAgent[`${a.id}:${a.name}`] = out.fills.length;
       }
 
       const mark = { ...state.lastPrices, ...prices };
@@ -124,7 +170,11 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
 
     // Daily ranking at 00:00 UTC (21:00 Brasília): first cycle of the UTC day takes it.
     const today = new Date(now).toISOString().slice(0, 10);
-    const existing = await admin.from("ranking_snapshots").select("id").eq("snapshot_date", today).limit(1);
+    const existing = await admin
+      .from("ranking_snapshots")
+      .select("id")
+      .eq("snapshot_date", today)
+      .limit(1);
     let ranking: { date: string; agents: number } | null = null;
     if (!existing.data?.length) ranking = await runRanking(admin, now);
 
@@ -137,10 +187,20 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
         details: { perAgent, ranking, diary, source: lastSource() } as unknown as Json,
       })
       .eq("id", runId);
-    return { skipped: false, agents: agents.length, fills: fillsTotal, rankingDate: ranking?.date ?? null };
+    localCycleInFlight = false;
+    return {
+      skipped: false,
+      agents: agents.length,
+      fills: fillsTotal,
+      rankingDate: ranking?.date ?? null,
+    };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    await admin.from("cycle_runs").update({ status: "erro", finished_at: new Date().toISOString(), message }).eq("id", runId);
+    await admin
+      .from("cycle_runs")
+      .update({ status: "erro", finished_at: new Date().toISOString(), message })
+      .eq("id", runId);
+    localCycleInFlight = false;
     throw e;
   }
 }
@@ -182,7 +242,13 @@ function describe(
     }
     const pos = after.positions[sym];
     const outcome: DiaryEntry["outcome"] =
-      before[sym] === undefined ? "inicio" : before[sym] === after.lastProcessed[sym] ? "sem_vela_nova" : last && i < strategy.warmup(p) ? "aquecendo" : "nova_vela";
+      before[sym] === undefined
+        ? "inicio"
+        : before[sym] === after.lastProcessed[sym]
+          ? "sem_vela_nova"
+          : last && i < strategy.warmup(p)
+            ? "aquecendo"
+            : "nova_vela";
     return {
       agentId: a.id,
       agent: `${a.name} v${a.version}`,
@@ -193,12 +259,16 @@ function describe(
       outcome,
       position: pos ? { entry: pos.entryPrice, stop: pos.stop, target: pos.target } : null,
       indicators,
-      actions: fills.filter((f) => f.symbol === sym).map((f) => ({ side: f.side, price: f.price, reason: f.reason })),
+      actions: fills
+        .filter((f) => f.symbol === sym)
+        .map((f) => ({ side: f.side, price: f.price, reason: f.reason })),
     };
   });
 }
 
-async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
+async function fetchAll<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+) {
   const out: T[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await page(from, from + 999);
@@ -210,7 +280,10 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
 }
 
 /** Recomputes every metric from stored history (snapshots + trades) and stores the day's board. */
-export async function runRanking(admin: Admin, now = Date.now()): Promise<{ date: string; agents: number }> {
+export async function runRanking(
+  admin: Admin,
+  now = Date.now(),
+): Promise<{ date: string; agents: number }> {
   const { data: agents, error } = await admin.from("agents").select("*").neq("status", "arquivado");
   if (error) throw error;
   const weekly = await fetchKlines("BTCUSDT", "1w", { limit: 200 });
@@ -219,10 +292,20 @@ export async function runRanking(admin: Admin, now = Date.now()): Promise<{ date
   const rows = [];
   for (const a of agents as AgentRow[]) {
     const snaps = await fetchAll((f, t) =>
-      admin.from("equity_snapshots").select("taken_at, equity").eq("agent_id", a.id).order("taken_at").range(f, t),
+      admin
+        .from("equity_snapshots")
+        .select("taken_at, equity")
+        .eq("agent_id", a.id)
+        .order("taken_at")
+        .range(f, t),
     );
     const trades = await fetchAll((f, t) =>
-      admin.from("trades").select("side, fee").eq("agent_id", a.id).order("candle_time").range(f, t),
+      admin
+        .from("trades")
+        .select("side, fee")
+        .eq("agent_id", a.id)
+        .order("candle_time")
+        .range(f, t),
     );
     const m = computeMetrics({
       initialCapital: Number(a.initial_capital),

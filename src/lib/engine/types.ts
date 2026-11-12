@@ -22,9 +22,19 @@ export type Position = {
   openedAt: number;
 };
 
+export type PendingEntry = {
+  stop: number;
+  target: number | null;
+  reason: string;
+  indicators: Record<string, number>;
+  signalCandleTime: number;
+};
+
 export type AgentState = {
   cash: number;
   positions: Record<string, Position>;
+  /** Entry proposals generated at candle close and filled on a later candle. */
+  pendingEntries: Record<string, PendingEntry>;
   /** openTime of the last candle processed per symbol. */
   lastProcessed: Record<string, number>;
   /** Last known close per symbol, used for mark-to-market. */
