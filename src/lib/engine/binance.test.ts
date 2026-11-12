@@ -17,6 +17,7 @@ describe("leitura da Binance", () => {
 
   it("se todos falharem, o erro lista cada endereço", async () => {
     vi.stubGlobal("fetch", async () => new Response("x", { status: 403 }));
-    await expect(fetchPrices(["BTCUSDT"])).rejects.toThrow(/data-api\.binance\.vision 403.*api\.binance\.us 403/);
+    const err = await fetchPrices(["BTCUSDT"]).catch((e: Error) => e.message);
+    for (const h of HOSTS) expect(err).toContain(`${new URL(h).host} 403`);
   });
 });
