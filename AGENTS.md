@@ -30,7 +30,7 @@ use the editor.
 <!-- LOVABLE:END -->
 
 ## Project rules
-- Simulated mode only: no code path places real Binance orders; market data comes from the public `data-api.binance.vision` host without keys. Why: briefing forbids real capital before validation and any key with withdrawal permission.
+- Simulated mode only: no code path places real Binance orders; market data comes from public keyless Binance hosts tried in order (`HOSTS` in `src/lib/engine/binance.ts`), because some server regions get HTTP 403 from a single host. Why: briefing forbids real capital before validation and any key with withdrawal permission.
 - The trading engine in `src/lib/engine/` is pure and deterministic, shared by the live cycle (`/api/public/jobs/cycle`) and the browser backtest. Why: ranking numbers must be reproducible from history.
 - Indicators are window-exact (simple averages, Cutler RSI, SMA-based ATR). Why: live cycles see a recent window while backtests see long history; both must yield the same value per candle.
 - Agent params, archetype, version and capital are immutable (DB trigger); changes happen by cloning into a new version. Why: personalities must be versioned and auditable.
