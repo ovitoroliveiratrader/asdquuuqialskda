@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { INITIAL_CAPITAL, PROMOTION } from "./config";
 import { sma, rsi } from "./indicators";
 import { computeMetrics, maxDrawdown, rankAgents, weekStart, weeklyReturns } from "./metrics";
-import { initialState, markToMarket, runAgent } from "./simulator";
+import { initialState, macroAllowsEntry, markToMarket, runAgent } from "./simulator";
 import type { Params } from "./strategies";
 import type { Candle } from "./types";
 
@@ -51,6 +51,15 @@ describe("indicadores", () => {
 });
 
 describe("simulador", () => {
+  it("filtro macro usa a vela histórica e não a última vela futura", () => {
+    const macro = Array.from({ length: 60 }, (_, i) => {
+      const close = i < 50 ? 100 : i === 50 ? 120 : 80;
+      return mk(i, close);
+    });
+    expect(macroAllowsEntry(macro, 51 * H)).toBe(true);
+    expect(macroAllowsEntry(macro)).toBe(false);
+  });
+
   it("gera o sinal no fechamento e executa a compra no open do candle seguinte", () => {
     const out = runAgent({
       state: initialState(10_000),

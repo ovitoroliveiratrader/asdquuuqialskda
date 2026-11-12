@@ -204,7 +204,7 @@ export function runAgent(input: RunInput): RunOutput {
         !exitedNow &&
         signal.entry &&
         volatilityAllowsEntry(ev.series, ev.i) &&
-        macroAllowsEntry(input.macroCandlesBySymbol?.[sym])
+        macroAllowsEntry(input.macroCandlesBySymbol?.[sym], c.openTime)
       ) {
         state.pendingEntries[sym] = {
           ...signal.entry,
@@ -228,12 +228,23 @@ function volatilityAllowsEntry(series: Record<string, number[]>, i: number): boo
   return current >= average;
 }
 
-function macroAllowsEntry(candles: Candle[] | undefined): boolean {
+export function macroAllowsEntry(candles: Candle[] | undefined, currentTime?: number): boolean {
   if (!candles || candles.length === 0) return true;
   const closes = candles.map((c) => c.close);
   const trend = ema(closes, 50);
-  const last = closes.length - 1;
-  return Number.isFinite(trend[last]) && closes[last]! > trend[last]!;
+  if (currentTime === undefined) {
+    const last = closes.length - 1;
+    return Number.isFinite(trend[last]) && closes[last]! > trend[last]!;
+  }
+  let idx = -1;
+  for (let k = candles.length - 1; k >= 0; k--) {
+    if (candles[k]!.closeTime <= currentTime) {
+      idx = k;
+      break;
+    }
+  }
+  if (idx < 0 || !Number.isFinite(trend[idx])) return true;
+  return closes[idx]! > trend[idx]!;
 }
 
 function dedupe(candles: Candle[]): Candle[] {

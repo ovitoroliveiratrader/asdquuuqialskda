@@ -1,4 +1,14 @@
-import { atr, priorHighest, priorLowest, rsi, sma, stdev } from "./indicators";
+import {
+  atr,
+  ema,
+  macd,
+  priorHighest,
+  priorLowest,
+  rsi,
+  sma,
+  stdev,
+  stochastic,
+} from "./indicators";
 import type { Archetype, Candle, Position, Timeframe } from "./types";
 
 export type Params = Record<string, number | string> & { timeframe: Timeframe };
@@ -75,8 +85,8 @@ const paciente: Strategy = {
   archetype: "paciente",
   label: "Paciente",
   logic:
-    "Entra só em tendência confirmada: média rápida acima da lenta, preço acima da média longa e rompendo a máxima recente. Sai quando o preço fecha abaixo da média lenta ou no stop móvel.",
-  timeframeLabel: "4h (média longa de 300 velas ≈ 50 dias, filtro diário)",
+    "Compra pullbacks em tendência de alta: EMA 21 acima da EMA 55, preço acima da EMA 200, correção próxima da EMA curta e rompimento da máxima recente.",
+  timeframeLabel: "4h",
   frequency: "Baixa",
   riskLabel: "Conservador",
   fields: [
@@ -111,9 +121,9 @@ const paciente: Strategy = {
   prepare: (c, p) => {
     const close = c.map((x) => x.close);
     return {
-      maF: sma(close, n(p, "mediaRapida")),
-      maS: sma(close, n(p, "mediaLenta")),
-      maL: sma(close, n(p, "mediaLonga")),
+      maF: ema(close, n(p, "mediaRapida")),
+      maS: ema(close, n(p, "mediaLenta")),
+      maL: ema(close, n(p, "mediaLonga")),
       hh: priorHighest(close, n(p, "rompimentoCandles")),
       atr: atr(
         c.map((x) => x.high),
@@ -145,6 +155,7 @@ const paciente: Strategy = {
     if (
       at(s, "maF", i) > at(s, "maS", i) &&
       c.close > at(s, "maL", i) &&
+      c.low <= at(s, "maF", i) + 0.5 * at(s, "atr", i) &&
       c.close > at(s, "hh", i)
     ) {
       return {
@@ -164,7 +175,7 @@ const seguidor: Strategy = {
   archetype: "seguidor",
   label: "Seguidor",
   logic:
-    "Momentum: compra o rompimento da máxima do canal quando a média rápida está acima da lenta. Sai quando o preço perde a mínima do canal de saída ou no stop.",
+    "Momentum: compra rompimentos de 20 períodos alinhados por EMA 20/50 e confirmados por volume 1,3x a média. Protege o trade no breakeven após 1 ATR.",
   timeframeLabel: "1h",
   frequency: "Média",
   riskLabel: "Moderado",
@@ -187,8 +198,8 @@ const seguidor: Strategy = {
   prepare: (c, p) => {
     const close = c.map((x) => x.close);
     return {
-      maF: sma(close, n(p, "mediaRapida")),
-      maS: sma(close, n(p, "mediaLenta")),
+      maF: ema(close, n(p, "mediaRapida")),
+      maS: ema(close, n(p, "mediaLenta")),
       up: priorHighest(
         c.map((x) => x.high),
         n(p, "canalEntrada"),
@@ -226,12 +237,13 @@ const seguidor: Strategy = {
             indicators: ind,
           },
         };
+      if (c.close >= pos.entryPrice + at(s, "atr", i)) return { trailStop: pos.entryPrice * 1.002 };
       return {};
     }
     if (
       c.close > at(s, "up", i) &&
       at(s, "maF", i) > at(s, "maS", i) &&
-      (!Number.isFinite(at(s, "volumeMedia", i)) || c.volume > 1.2 * at(s, "volumeMedia", i))
+      (!Number.isFinite(at(s, "volumeMedia", i)) || c.volume > 1.3 * at(s, "volumeMedia", i))
     ) {
       return {
         entry: {
@@ -298,7 +310,9 @@ const contrario: Strategy = {
     return {
       rsi: rsi(close, n(p, "rsiPeriodo")),
       mid,
+      upper: mid.map((m, i) => m + n(p, "bollingerDesvios") * sd[i]!),
       lower: mid.map((m, i) => m - n(p, "bollingerDesvios") * sd[i]!),
+      trend: ema(close, 100),
       atr: atr(
         c.map((x) => x.high),
         c.map((x) => x.low),
@@ -311,11 +325,13 @@ const contrario: Strategy = {
     const ind = {
       rsi: r2(at(s, "rsi", i)),
       bandaInferior: r2(at(s, "lower", i)),
+      bandaCentral: r2(at(s, "mid", i)),
+      tendencia: r2(at(s, "trend", i)),
       atr: r2(at(s, "atr", i)),
       fechamento: c.close,
     };
     if (pos) {
-      if (at(s, "rsi", i) > n(p, "rsiSaida"))
+      if (at(s, "rsi", i) > 68 || c.close >= at(s, "mid", i))
         return {
           exit: {
             reason: `Sobrecomprado: RSI ${fmt(at(s, "rsi", i))} acima de ${p["rsiSaida"]}.`,
@@ -324,11 +340,17 @@ const contrario: Strategy = {
         };
       return {};
     }
-    if (at(s, "rsi", i) < n(p, "rsiEntrada") && c.close < at(s, "lower", i)) {
+    const recoveredRsi = at(s, "rsi", i) > 28 && at(s, "rsi", i) < 45 && at(s, "rsi", i - 1) <= 30;
+    if (
+      c.close > at(s, "trend", i) * 0.96 &&
+      c.low < at(s, "lower", i) &&
+      c.close >= at(s, "lower", i) &&
+      recoveredRsi
+    ) {
       return {
         entry: {
-          stop: c.close - n(p, "stopAtr") * at(s, "atr", i),
-          target: Math.max(at(s, "mid", i), c.close + 2 * n(p, "stopAtr") * at(s, "atr", i)),
+          stop: Math.min(c.low, c.close - 1.5 * at(s, "atr", i)),
+          target: Math.max(at(s, "mid", i), c.close + 2 * 1.5 * at(s, "atr", i)),
           reason: `Sobrevendido: RSI ${fmt(at(s, "rsi", i))} abaixo de ${p["rsiEntrada"]} e fechamento ${fmt(c.close)} abaixo da banda inferior (${fmt(at(s, "lower", i))}).`,
           indicators: ind,
         },
@@ -342,8 +364,8 @@ const relampago: Strategy = {
   archetype: "relampago",
   label: "Relâmpago",
   logic:
-    "Operações curtas: compra quando a média rápida cruza para cima da lenta com RSI forte. Sai no alvo percentual, no stop ou quando as médias cruzam de volta.",
-  timeframeLabel: "1m",
+    "Momentum de baixo ruído: EMA 9/21 cruza com preço acima da EMA 50, RSI entre 52 e 65, MACD positivo e Estocástico saindo da sobrevenda.",
+  timeframeLabel: "5m (configurável entre 1m e 15m)",
   frequency: "Muito alta",
   riskLabel: "Agressivo",
   fields: [
@@ -372,9 +394,17 @@ const relampago: Strategy = {
   prepare: (c, p) => {
     const close = c.map((x) => x.close);
     return {
-      maF: sma(close, n(p, "mediaRapida")),
-      maS: sma(close, n(p, "mediaLenta")),
+      maF: ema(close, n(p, "mediaRapida")),
+      maS: ema(close, n(p, "mediaLenta")),
+      maBase: ema(close, 50),
       rsi: rsi(close, n(p, "rsiPeriodo")),
+      macd: macd(close).histogram,
+      stochastic: stochastic(
+        c.map((x) => x.high),
+        c.map((x) => x.low),
+        close,
+        14,
+      ),
       atr: atr(
         c.map((x) => x.high),
         c.map((x) => x.low),
@@ -387,6 +417,9 @@ const relampago: Strategy = {
     const ind = {
       mediaRapida: r2(at(s, "maF", i)),
       mediaLenta: r2(at(s, "maS", i)),
+      mediaBase: r2(at(s, "maBase", i)),
+      macd: r2(at(s, "macd", i)),
+      estocastico: r2(at(s, "stochastic", i)),
       rsi: r2(at(s, "rsi", i)),
       atr: r2(at(s, "atr", i)),
       fechamento: c.close,
@@ -402,14 +435,21 @@ const relampago: Strategy = {
       return {};
     }
     const crossed = at(s, "maF", i) > at(s, "maS", i) && at(s, "maF", i - 1) <= at(s, "maS", i - 1);
-    if (crossed && at(s, "rsi", i) > n(p, "rsiMinimo")) {
+    const momentum = at(s, "macd", i) > 0;
+    const stochasticRecovery =
+      at(s, "stochastic", i) > at(s, "stochastic", i - 1) && at(s, "stochastic", i - 1) < 30;
+    if (
+      crossed &&
+      c.close > at(s, "maBase", i) &&
+      at(s, "rsi", i) >= Math.max(52, n(p, "rsiMinimo")) &&
+      at(s, "rsi", i) <= 65 &&
+      momentum &&
+      stochasticRecovery
+    ) {
       return {
         entry: {
-          stop: c.close - n(p, "stopAtr") * at(s, "atr", i),
-          target: Math.max(
-            c.close * (1 + n(p, "alvoPercentual")),
-            c.close + 2 * n(p, "stopAtr") * at(s, "atr", i),
-          ),
+          stop: c.close - 1.2 * at(s, "atr", i),
+          target: c.close + 2.5 * at(s, "atr", i),
           reason: `Cruzamento de alta: média ${p["mediaRapida"]} (${fmt(at(s, "maF", i))}) passou a média ${p["mediaLenta"]} (${fmt(at(s, "maS", i))}) com RSI ${fmt(at(s, "rsi", i))}.`,
           indicators: ind,
         },
@@ -420,6 +460,57 @@ const relampago: Strategy = {
 };
 
 export const STRATEGIES: Record<Archetype, Strategy> = { paciente, seguidor, contrario, relampago };
+
+/** Defaults for new agents; persisted agents can be migrated independently. */
+export const DEFAULT_PARAMS: Record<Archetype, Params> = {
+  paciente: {
+    timeframe: "4h",
+    mediaRapida: 21,
+    mediaLenta: 55,
+    mediaLonga: 200,
+    rompimentoCandles: 3,
+    atrPeriodo: 14,
+    stopAtr: 2,
+    trailingAtr: 2.5,
+    riscoPorOperacao: 0.005,
+    alocacaoMaxima: 0.5,
+  },
+  seguidor: {
+    timeframe: "1h",
+    mediaRapida: 20,
+    mediaLenta: 50,
+    canalEntrada: 20,
+    canalSaida: 10,
+    atrPeriodo: 14,
+    stopAtr: 1.5,
+    riscoPorOperacao: 0.01,
+    alocacaoMaxima: 0.5,
+  },
+  contrario: {
+    timeframe: "15m",
+    rsiPeriodo: 14,
+    rsiEntrada: 30,
+    rsiSaida: 68,
+    bollingerPeriodo: 20,
+    bollingerDesvios: 2,
+    atrPeriodo: 14,
+    stopAtr: 1.5,
+    riscoPorOperacao: 0.01,
+    alocacaoMaxima: 0.5,
+  },
+  relampago: {
+    timeframe: "5m",
+    mediaRapida: 9,
+    mediaLenta: 21,
+    rsiPeriodo: 14,
+    rsiMinimo: 52,
+    alvoPercentual: 0.004,
+    atrPeriodo: 14,
+    stopAtr: 1.2,
+    riscoPorOperacao: 0.01,
+    alocacaoMaxima: 0.5,
+  },
+};
 
 export const TIMEFRAME_MS: Record<Timeframe, number> = {
   "1m": 60_000,

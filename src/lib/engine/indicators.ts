@@ -28,6 +28,29 @@ export function ema(values: number[], period: number): number[] {
   return out;
 }
 
+export function macd(values: number[], fast = 12, slow = 26, signalPeriod = 9) {
+  const fastLine = ema(values, fast);
+  const slowLine = ema(values, slow);
+  const line = values.map((_, i) => fastLine[i]! - slowLine[i]!);
+  const signal = ema(line, signalPeriod);
+  return { line, signal, histogram: line.map((v, i) => v - signal[i]!) };
+}
+
+export function stochastic(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  period = 14,
+): number[] {
+  const out = new Array<number>(closes.length).fill(NaN);
+  for (let i = period - 1; i < closes.length; i++) {
+    const high = Math.max(...highs.slice(i - period + 1, i + 1));
+    const low = Math.min(...lows.slice(i - period + 1, i + 1));
+    out[i] = high === low ? 50 : ((closes[i]! - low) / (high - low)) * 100;
+  }
+  return out;
+}
+
 export function stdev(values: number[], period: number): number[] {
   const mean = sma(values, period);
   const out = new Array<number>(values.length).fill(NaN);
