@@ -1,4 +1,5 @@
 import { FEE_RATE, MIN_NOTIONAL, SLIPPAGE_RATE } from "./config";
+import { ema } from "./indicators";
 import { STRATEGIES, type Params } from "./strategies";
 import type { AgentState, Archetype, Candle, EquityPoint, Fill, PendingEntry } from "./types";
 
@@ -59,8 +60,13 @@ export type RunInput = {
   params: Params;
   /** Closed candles only, ascending, for the agent's timeframe. */
   candlesBySymbol: Record<string, Candle[]>;
+  /** Optional higher-timeframe candles used by the macro trend guard. */
+  macroCandlesBySymbol?: Record<string, Candle[]>;
   /** Live mode: a symbol seen for the first time starts at its latest candle, without trading history. */
   startFresh?: boolean;
+  /** Current market prices used to fill a pending live entry immediately. */
+  marketPrices?: Record<string, number>;
+  marketTime?: number;
   recordEquity?: boolean;
   costs?: SimCosts;
 };
@@ -102,6 +108,30 @@ export function runAgent(input: RunInput): RunOutput {
     }
   }
 
+  // A live cycle may run several minutes after a signal while its timeframe
+  // candle is still open. Do not wait for that candle to close: fill the
+  // pending proposal at the current ticker price.
+  if (input.startFresh && input.marketPrices) {
+    for (const [sym, pending] of Object.entries(state.pendingEntries)) {
+      const price = input.marketPrices[sym];
+      if (typeof price !== "number" || !Number.isFinite(price)) continue;
+      const candleTime = input.marketTime ?? Date.now();
+      const synthetic = {
+        openTime: candleTime,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: 0,
+        closeTime: candleTime,
+      };
+      const f = buy(state, sym, synthetic, pending, p, costs);
+      if (f) fills.push(f);
+      delete state.pendingEntries[sym];
+      state.lastPrices[sym] = price;
+    }
+  }
+
   events.sort(
     (a, b) => a.candles[a.i]!.closeTime - b.candles[b.i]!.closeTime || (a.sym < b.sym ? -1 : 1),
   );
@@ -115,17 +145,19 @@ export function runAgent(input: RunInput): RunOutput {
     if (ev.i >= warmup) {
       let exitedNow = false;
       const pending = state.pendingEntries[sym];
+      let openedThisCandle = false;
       if (pending && pending.signalCandleTime < c.openTime && !state.positions[sym]) {
         const f = buy(state, sym, c, pending, p, costs);
         if (f) fills.push(f);
         delete state.pendingEntries[sym];
+        openedThisCandle = Boolean(f);
       }
 
       const pos = state.positions[sym];
 
-      if (pos && pos.openedAt < c.openTime) {
+      if (pos && (pos.openedAt < c.openTime || openedThisCandle)) {
         if (c.low <= pos.stop) {
-          const ref = Math.min(c.open, pos.stop);
+          const ref = Math.min(pos.entryPrice, pos.stop);
           fills.push(
             sell(
               state,
@@ -139,7 +171,7 @@ export function runAgent(input: RunInput): RunOutput {
           );
           exitedNow = true;
         } else if (pos.target !== null && c.high >= pos.target) {
-          const ref = Math.max(c.open, pos.target);
+          const ref = Math.max(pos.entryPrice, pos.target);
           fills.push(
             sell(
               state,
@@ -167,7 +199,13 @@ export function runAgent(input: RunInput): RunOutput {
         open.stop = signal.trailStop;
       }
 
-      if (!state.positions[sym] && !exitedNow && signal.entry) {
+      if (
+        !state.positions[sym] &&
+        !exitedNow &&
+        signal.entry &&
+        volatilityAllowsEntry(ev.series, ev.i) &&
+        macroAllowsEntry(input.macroCandlesBySymbol?.[sym])
+      ) {
         state.pendingEntries[sym] = {
           ...signal.entry,
           signalCandleTime: c.openTime,
@@ -179,6 +217,23 @@ export function runAgent(input: RunInput): RunOutput {
   }
 
   return { state, fills, equity };
+}
+
+function volatilityAllowsEntry(series: Record<string, number[]>, i: number): boolean {
+  const current = series["atr"]?.[i];
+  if (typeof current !== "number" || !Number.isFinite(current)) return false;
+  const window = (series["atr"] ?? []).slice(Math.max(0, i - 19), i + 1).filter(Number.isFinite);
+  if (window.length < 5) return true;
+  const average = window.reduce((sum, value) => sum + value, 0) / window.length;
+  return current >= average;
+}
+
+function macroAllowsEntry(candles: Candle[] | undefined): boolean {
+  if (!candles || candles.length === 0) return true;
+  const closes = candles.map((c) => c.close);
+  const trend = ema(closes, 50);
+  const last = closes.length - 1;
+  return Number.isFinite(trend[last]) && closes[last]! > trend[last]!;
 }
 
 function dedupe(candles: Candle[]): Candle[] {

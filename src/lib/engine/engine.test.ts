@@ -36,7 +36,10 @@ const seguidorParams: Params = {
 };
 
 const breakoutCandles = () =>
-  [100, 100, 100, 100, 110, 112].map((c, i) => mk(i, c, i === 5 ? 111 : c));
+  [100, 100, 100, 100, 110, 112].map((c, i) => ({
+    ...mk(i, c, i === 5 ? 111 : c),
+    volume: i === 4 ? 2 : 1,
+  }));
 
 describe("indicadores", () => {
   it("média simples usa só a janela", () => {
@@ -87,21 +90,48 @@ describe("simulador", () => {
   });
 
   it("stop vende no preço do stop com deslizamento e registra lucro/prejuízo após taxas", () => {
-    const base = [100, 100, 100, 100, 110, 111].map((c, i) => mk(i, c, i === 5 ? 111 : c));
-    const crash = mk(6, 90, 109, 109, 85);
+    const base = [100, 100, 100, 100, 110].map((c, i) => ({
+      ...mk(i, c),
+      volume: i === 4 ? 2 : 1,
+    }));
+    const entryCandle = mk(5, 90, 111, 111, 85);
     const out = runAgent({
       state: initialState(10_000),
       archetype: "seguidor",
       params: seguidorParams,
-      candlesBySymbol: { BTCUSDT: [...base, crash] },
+      candlesBySymbol: { BTCUSDT: [...base, entryCandle] },
     });
     const sell = out.fills.find((f) => f.side === "venda")!;
     const buy = out.fills[0]!;
     const stop = Number(buy.indicators["stop"]);
-    expect(sell.referencePrice).toBeCloseTo(Math.min(109, stop), 2);
+    expect(sell.referencePrice).toBeCloseTo(Math.min(buy.price, stop), 2);
     expect(sell.price).toBeCloseTo(sell.referencePrice * 0.9995, 6);
     expect(sell.realizedPnl!).toBeCloseTo(sell.notional - sell.fee - buy.notional - buy.fee, 6);
     expect(out.state.closedTrades).toBe(1);
+  });
+
+  it("executa uma ordem pendente no preço de mercado durante o ciclo ao vivo", () => {
+    const state = initialState(10_000);
+    state.pendingEntries["BTCUSDT"] = {
+      stop: 90,
+      target: 140,
+      reason: "sinal confirmado",
+      indicators: { atr: 10 },
+      signalCandleTime: 1,
+    };
+    const out = runAgent({
+      state,
+      archetype: "seguidor",
+      params: seguidorParams,
+      candlesBySymbol: { BTCUSDT: [] },
+      startFresh: true,
+      marketPrices: { BTCUSDT: 105 },
+      marketTime: 2,
+    });
+    expect(out.fills).toHaveLength(1);
+    expect(out.fills[0]!.referencePrice).toBe(105);
+    expect(out.state.pendingEntries).toEqual({});
+    expect(out.state.positions["BTCUSDT"]).toBeDefined();
   });
 
   it("é determinístico: processar em dois ciclos dá o mesmo resultado que de uma vez", () => {

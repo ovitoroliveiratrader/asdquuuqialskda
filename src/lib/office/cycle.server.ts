@@ -73,22 +73,32 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
     if (error) throw error;
 
     const pairs = new Map<string, { symbol: string; tf: Timeframe }>();
+    const macroPairs = new Map<string, { symbol: string; tf: Timeframe }>();
     const allSymbols = new Set<string>();
     for (const a of agents) {
       for (const s of a.symbols) allSymbols.add(s);
       if (a.status !== "ativo") continue;
       const tf = (a.params as Params).timeframe;
-      for (const s of a.symbols) pairs.set(`${s}:${tf}`, { symbol: s, tf });
+      const macroTf: Timeframe = ["1m", "5m", "15m", "1h"].includes(tf) ? "4h" : "1d";
+      for (const s of a.symbols) {
+        pairs.set(`${s}:${tf}`, { symbol: s, tf });
+        macroPairs.set(`${s}:${macroTf}`, { symbol: s, tf: macroTf });
+      }
     }
 
-    const [prices, ...candleSets] = await Promise.all([
+    const [prices, candleSets, macroSets] = await Promise.all([
       allSymbols.size
         ? fetchPrices([...allSymbols])
         : Promise.resolve({} as Record<string, number>),
-      ...[...pairs.values()].map((p) => fetchKlines(p.symbol, p.tf, { limit: 1000 })),
+      Promise.all([...pairs.values()].map((p) => fetchKlines(p.symbol, p.tf, { limit: 1000 }))),
+      Promise.all([...macroPairs.values()].map((p) => fetchKlines(p.symbol, p.tf, { limit: 300 }))),
     ]);
     const candles = new Map<string, Candle[]>();
     [...pairs.keys()].forEach((k, i) => candles.set(k, closedOnly(candleSets[i] ?? [], now)));
+    const macroCandles = new Map<string, Candle[]>();
+    [...macroPairs.keys()].forEach((k, i) =>
+      macroCandles.set(k, closedOnly(macroSets[i] ?? [], now)),
+    );
 
     let fillsTotal = 0;
     const perAgent: Record<string, number> = {};
@@ -101,13 +111,20 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
         const bySymbol = Object.fromEntries(
           a.symbols.map((s) => [s, candles.get(`${s}:${p.timeframe}`) ?? []]),
         );
+        const macroTf: Timeframe = ["1m", "5m", "15m", "1h"].includes(p.timeframe) ? "4h" : "1d";
+        const macroBySymbol = Object.fromEntries(
+          a.symbols.map((s) => [s, macroCandles.get(`${s}:${macroTf}`) ?? []]),
+        );
         const before = { ...state.lastProcessed };
         const out = runAgent({
           state,
           archetype: a.archetype as Archetype,
           params: p,
           candlesBySymbol: bySymbol,
+          macroCandlesBySymbol: macroBySymbol,
           startFresh: true,
+          marketPrices: prices,
+          marketTime: now,
         });
         diary.push(...describe(a, p, bySymbol, before, out.state, out.fills));
         state = out.state;
@@ -212,7 +229,7 @@ export type DiaryEntry = {
   timeframe: string;
   candleTime: number | null;
   close: number | null;
-  outcome: "nova_vela" | "sem_vela_nova" | "inicio" | "aquecendo";
+  outcome: "nova_vela" | "sem_vela_nova" | "inicio" | "aquecendo" | "ordem_pendente";
   position: { entry: number; stop: number; target: number | null } | null;
   indicators: Record<string, number>;
   actions: { side: string; price: number; reason: string }[];
@@ -241,8 +258,9 @@ function describe(
       }
     }
     const pos = after.positions[sym];
-    const outcome: DiaryEntry["outcome"] =
-      before[sym] === undefined
+    const outcome: DiaryEntry["outcome"] = after.pendingEntries[sym]
+      ? "ordem_pendente"
+      : before[sym] === undefined
         ? "inicio"
         : before[sym] === after.lastProcessed[sym]
           ? "sem_vela_nova"

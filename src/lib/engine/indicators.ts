@@ -15,6 +15,19 @@ export function sma(values: number[], period: number): number[] {
   return out;
 }
 
+/** Exponential moving average with a warmup equal to its period. */
+export function ema(values: number[], period: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN);
+  if (period <= 0 || values.length < period) return out;
+  let seed = 0;
+  for (let i = 0; i < period; i++) seed += values[i]!;
+  out[period - 1] = seed / period;
+  const alpha = 2 / (period + 1);
+  for (let i = period; i < values.length; i++)
+    out[i] = values[i]! * alpha + out[i - 1]! * (1 - alpha);
+  return out;
+}
+
 export function stdev(values: number[], period: number): number[] {
   const mean = sma(values, period);
   const out = new Array<number>(values.length).fill(NaN);
@@ -55,12 +68,7 @@ export function rsi(closes: number[], period: number): number[] {
 }
 
 /** Average true range as a simple mean of true ranges. */
-export function atr(
-  highs: number[],
-  lows: number[],
-  closes: number[],
-  period: number,
-): number[] {
+export function atr(highs: number[], lows: number[], closes: number[], period: number): number[] {
   const tr = highs.map((h, i) =>
     i === 0
       ? h - lows[i]!

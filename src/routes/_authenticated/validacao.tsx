@@ -6,8 +6,21 @@ import { Shell } from "@/components/office/Shell";
 import { EquityChart } from "@/components/office/Charts";
 import { CriteriaList } from "@/components/office/Criteria";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { closedOnly, fetchKlineRange, fetchKlines } from "@/lib/engine/binance";
 import { INITIAL_CAPITAL } from "@/lib/engine/config";
 import { classifyWeeks, computeMetrics, maxDrawdown } from "@/lib/engine/metrics";
@@ -22,7 +35,11 @@ export const Route = createFileRoute("/_authenticated/validacao")({
   head: () => ({
     meta: [
       { title: "Validação histórica · Escritório de Agentes" },
-      { name: "description", content: "Rode qualquer agente sobre candles reais da Binance, com período de desenvolvimento e de teste separados." },
+      {
+        name: "description",
+        content:
+          "Rode qualquer agente sobre candles reais da Binance, com período de desenvolvimento e de teste separados.",
+      },
       { property: "og:title", content: "Validação histórica · Escritório de Agentes" },
       { property: "og:description", content: "Backtest dos agentes em candles reais da Binance." },
       { property: "og:type", content: "website" },
@@ -75,7 +92,9 @@ function Validation() {
 }
 
 function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) {
-  const [agentId, setAgentId] = useState(() => agents.find((a) => a.archetype === "paciente")?.id ?? first.id);
+  const [agentId, setAgentId] = useState(
+    () => agents.find((a) => a.archetype === "paciente")?.id ?? first.id,
+  );
   const agent = agents.find((a) => a.id === agentId) ?? first;
   const tf = (agent.params as Params).timeframe;
   const [days, setDays] = useState<number>(PERIODS[tf][1]);
@@ -90,10 +109,18 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
       const start = now - days * DAY;
       const warmStart = start - (strategy.warmup(p) + 5) * TIMEFRAME_MS[p.timeframe];
       const bySymbol: Record<string, Candle[]> = {};
+      const macroBySymbol: Record<string, Candle[]> = {};
+      const macroTf: Timeframe = ["1m", "5m", "15m", "1h"].includes(p.timeframe) ? "4h" : "1d";
       let loaded = 0;
       for (const s of agent.symbols) {
         bySymbol[s] = closedOnly(
-          await fetchKlineRange(s, p.timeframe, warmStart, now, (n) => setProgress(`Baixando ${pair(s)}: ${(loaded + n).toLocaleString("pt-BR")} velas`)),
+          await fetchKlineRange(s, p.timeframe, warmStart, now, (n) =>
+            setProgress(`Baixando ${pair(s)}: ${(loaded + n).toLocaleString("pt-BR")} velas`),
+          ),
+          now,
+        );
+        macroBySymbol[s] = closedOnly(
+          await fetchKlineRange(s, macroTf, start - 50 * TIMEFRAME_MS[macroTf], now),
           now,
         );
         loaded += bySymbol[s].length;
@@ -109,14 +136,37 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
         live[s] = warm[s]?.[warm[s].length - 1]?.openTime ?? -Infinity;
       }
       const base = initialState(INITIAL_CAPITAL);
-      base.lastProcessed = Object.fromEntries(Object.entries(live).filter(([, v]) => Number.isFinite(v)));
-      const run = runAgent({ state: base, archetype: agent.archetype as Archetype, params: p, candlesBySymbol: bySymbol, recordEquity: true });
+      base.lastProcessed = Object.fromEntries(
+        Object.entries(live).filter(([, v]) => Number.isFinite(v)),
+      );
+      const run = runAgent({
+        state: base,
+        archetype: agent.archetype as Archetype,
+        params: p,
+        candlesBySymbol: bySymbol,
+        macroCandlesBySymbol: macroBySymbol,
+        recordEquity: true,
+      });
 
       // Reproducibility check: process the same history in two halves, like consecutive live cycles.
       const mid = start + (now - start) / 2;
-      const firstHalf = Object.fromEntries(Object.entries(bySymbol).map(([s, cs]) => [s, cs.filter((c) => c.openTime < mid)]));
-      const a = runAgent({ state: base, archetype: agent.archetype as Archetype, params: p, candlesBySymbol: firstHalf });
-      const b = runAgent({ state: a.state, archetype: agent.archetype as Archetype, params: p, candlesBySymbol: bySymbol });
+      const firstHalf = Object.fromEntries(
+        Object.entries(bySymbol).map(([s, cs]) => [s, cs.filter((c) => c.openTime < mid)]),
+      );
+      const a = runAgent({
+        state: base,
+        archetype: agent.archetype as Archetype,
+        params: p,
+        candlesBySymbol: firstHalf,
+        macroCandlesBySymbol: macroBySymbol,
+      });
+      const b = runAgent({
+        state: a.state,
+        archetype: agent.archetype as Archetype,
+        params: p,
+        candlesBySymbol: bySymbol,
+        macroCandlesBySymbol: macroBySymbol,
+      });
       const splitCheck = Math.abs(b.state.cash - run.state.cash);
 
       const weekly = closedOnly(await fetchKlines("BTCUSDT", "1w", { limit: 1000 }), now);
@@ -173,7 +223,8 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
             value={agent.id}
             onValueChange={(v) => {
               setAgentId(v);
-              const t = (agents.find((a) => a.id === v)?.params as Params | undefined)?.timeframe ?? "4h";
+              const t =
+                (agents.find((a) => a.id === v)?.params as Params | undefined)?.timeframe ?? "4h";
               setDays(PERIODS[t][1]);
             }}
           >
@@ -196,7 +247,12 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
               <button
                 key={d}
                 onClick={() => setDays(d)}
-                className={cn("rounded-sm px-3 py-2 font-mono text-xs", d === days ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground")}
+                className={cn(
+                  "rounded-sm px-3 py-2 font-mono text-xs",
+                  d === days
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground",
+                )}
               >
                 {d} dias
               </button>
@@ -207,18 +263,27 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
           <FlaskConical className="size-4" /> {m.isPending ? "Rodando…" : "Rodar validação"}
         </Button>
         {progress && <span className="num text-xs text-muted-foreground">{progress}</span>}
-        {m.error && <span className="text-xs text-loss">{m.error instanceof Error ? m.error.message : "Falhou"}</span>}
+        {m.error && (
+          <span className="text-xs text-loss">
+            {m.error instanceof Error ? m.error.message : "Falhou"}
+          </span>
+        )}
       </div>
 
       {!r ? (
         <p className="text-sm text-muted-foreground">
-          Próximo passo do briefing: validar o Paciente em dados históricos reais antes de confiar no escritório. Escolha o período e rode.
+          Próximo passo do briefing: validar o Paciente em dados históricos reais antes de confiar
+          no escritório. Escolha o período e rode.
         </p>
       ) : (
         <div className="grid gap-5">
           <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-6">
             <Kpi label="Patrimônio final" value={money(r.metrics.equity)} />
-            <Kpi label="Retorno" value={pct(r.metrics.returnPct)} className={signClass(r.metrics.returnPct)} />
+            <Kpi
+              label="Retorno"
+              value={pct(r.metrics.returnPct)}
+              className={signClass(r.metrics.returnPct)}
+            />
             <Kpi label="Drawdown máx." value={pctPlain(r.metrics.maxDrawdownPct, 2)} />
             <Kpi label="Operações" value={String(r.metrics.tradesCount)} />
             <Kpi label="Taxas pagas" value={money(r.metrics.feesPaid)} />
@@ -227,7 +292,9 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
 
           <div className="grid items-start gap-5 lg:grid-cols-[1fr_340px]">
             <section className="rounded-md border border-border bg-card p-5">
-              <h2 className="mb-3 text-lg font-semibold">Patrimônio simulado · {r.agent.name} v{r.agent.version}</h2>
+              <h2 className="mb-3 text-lg font-semibold">
+                Patrimônio simulado · {r.agent.name} v{r.agent.version}
+              </h2>
               <EquityChart data={chart} initial={INITIAL_CAPITAL} />
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Segment title="Desenvolvimento (70%)" s={r.dev} />
@@ -242,8 +309,12 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
               <section className="rounded-md border border-border bg-card p-5 text-sm">
                 <h2 className="mb-2 text-lg font-semibold">Conferência</h2>
                 <p className="text-muted-foreground">
-                  {r.candlesLoaded.toLocaleString("pt-BR")} velas reais baixadas. Processar o histórico de uma vez ou em duas partes (como ciclos
-                  consecutivos) deu diferença de <span className={cn("num", r.splitCheck < 0.01 ? "text-gain" : "text-loss")}>{money(r.splitCheck)} USDT</span>.
+                  {r.candlesLoaded.toLocaleString("pt-BR")} velas reais baixadas. Processar o
+                  histórico de uma vez ou em duas partes (como ciclos consecutivos) deu diferença de{" "}
+                  <span className={cn("num", r.splitCheck < 0.01 ? "text-gain" : "text-loss")}>
+                    {money(r.splitCheck)} USDT
+                  </span>
+                  .
                 </p>
               </section>
             </aside>
@@ -252,7 +323,9 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
           <section className="rounded-md border border-border bg-card p-5">
             <h2 className="mb-3 text-lg font-semibold">Execuções ({r.fills.length})</h2>
             {r.fills.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma entrada no período: as condições do agente não se cumpriram.</p>
+              <p className="text-sm text-muted-foreground">
+                Nenhuma entrada no período: as condições do agente não se cumpriram.
+              </p>
             ) : (
               <div className="max-h-[480px] overflow-auto">
                 <Table>
@@ -267,16 +340,34 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[...r.fills].reverse().slice(0, 300).map((f, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="num whitespace-nowrap text-xs">{dateTimeBR(f.candleTime)}</TableCell>
-                        <TableCell className={cn("text-xs font-semibold uppercase", f.side === "compra" ? "text-gain" : "text-loss")}>{f.side}</TableCell>
-                        <TableCell className="text-xs">{pair(f.symbol)}</TableCell>
-                        <TableCell className="num text-right text-xs">{money(f.price)}</TableCell>
-                        <TableCell className={cn("num text-right text-xs", signClass(f.realizedPnl))}>{f.realizedPnl === null ? "—" : money(f.realizedPnl)}</TableCell>
-                        <TableCell className="min-w-72 text-xs text-muted-foreground">{f.reason}</TableCell>
-                      </TableRow>
-                    ))}
+                    {[...r.fills]
+                      .reverse()
+                      .slice(0, 300)
+                      .map((f, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="num whitespace-nowrap text-xs">
+                            {dateTimeBR(f.candleTime)}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "text-xs font-semibold uppercase",
+                              f.side === "compra" ? "text-gain" : "text-loss",
+                            )}
+                          >
+                            {f.side}
+                          </TableCell>
+                          <TableCell className="text-xs">{pair(f.symbol)}</TableCell>
+                          <TableCell className="num text-right text-xs">{money(f.price)}</TableCell>
+                          <TableCell
+                            className={cn("num text-right text-xs", signClass(f.realizedPnl))}
+                          >
+                            {f.realizedPnl === null ? "—" : money(f.realizedPnl)}
+                          </TableCell>
+                          <TableCell className="min-w-72 text-xs text-muted-foreground">
+                            {f.reason}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
               </div>
@@ -288,12 +379,19 @@ function ValidationRunner({ agents, first }: { agents: Agent[]; first: Agent }) 
   );
 }
 
-function Segment({ title, s }: { title: string; s: { returnPct: number; mdd: number; from: number; to: number } }) {
+function Segment({
+  title,
+  s,
+}: {
+  title: string;
+  s: { returnPct: number; mdd: number; from: number; to: number };
+}) {
   return (
     <div className="rounded-sm bg-muted p-3">
       <p className="text-xs text-muted-foreground">{title}</p>
       <p className="num mt-1 text-sm">
-        <span className={signClass(s.returnPct)}>{pct(s.returnPct)}</span> · drawdown {pctPlain(s.mdd, 2)}
+        <span className={signClass(s.returnPct)}>{pct(s.returnPct)}</span> · drawdown{" "}
+        {pctPlain(s.mdd, 2)}
       </p>
       <p className="num mt-1 text-[11px] text-muted-foreground">
         {dateBR(s.from)} → {dateBR(s.to)}
