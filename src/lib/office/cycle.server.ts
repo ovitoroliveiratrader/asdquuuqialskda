@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
-import { closedOnly, fetchKlines, fetchPrices } from "@/lib/engine/binance";
+import { closedOnly, fetchKlines, fetchPrices, lastSource } from "@/lib/engine/binance";
 import { classifyWeeks, computeMetrics, rankAgents } from "@/lib/engine/metrics";
 import { markToMarket, normalizeState, positionsValue, runAgent } from "@/lib/engine/simulator";
 import { STRATEGIES, type Params } from "@/lib/engine/strategies";
@@ -133,8 +133,8 @@ export async function runCycle(admin: Admin, now = Date.now()): Promise<CycleRes
       .update({
         status: "ok",
         finished_at: new Date().toISOString(),
-        message: `${agents.length} agentes, ${fillsTotal} execuções`,
-        details: { perAgent, ranking, diary } as unknown as Json,
+        message: `${agents.length} agentes, ${fillsTotal} execuções · fonte ${new URL(lastSource()).host}`,
+        details: { perAgent, ranking, diary, source: lastSource() } as unknown as Json,
       })
       .eq("id", runId);
     return { skipped: false, agents: agents.length, fills: fillsTotal, rankingDate: ranking?.date ?? null };
