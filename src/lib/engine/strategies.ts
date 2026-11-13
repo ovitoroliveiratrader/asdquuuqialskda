@@ -381,12 +381,12 @@ const relampago: Strategy = {
       step: 1,
     },
     {
-      key: "alvoPercentual",
-      label: "Alvo de lucro",
-      kind: "pct",
-      min: 0.001,
-      max: 0.05,
-      step: 0.001,
+      key: "alvoAtr",
+      label: "Alvo de lucro (múltiplo do ATR)",
+      kind: "number",
+      min: 1.5,
+      max: 5,
+      step: 0.1,
     },
     ...common,
   ],
@@ -446,11 +446,13 @@ const relampago: Strategy = {
       momentum &&
       stochasticRecovery
     ) {
+      const stopDistance = n(p, "stopAtr") * at(s, "atr", i);
+      const targetDistance = (n(p, "alvoAtr") || 2.5) * at(s, "atr", i);
       return {
         entry: {
-          stop: c.close - 1.2 * at(s, "atr", i),
-          target: c.close + 2.5 * at(s, "atr", i),
-          reason: `Cruzamento de alta: média ${p["mediaRapida"]} (${fmt(at(s, "maF", i))}) passou a média ${p["mediaLenta"]} (${fmt(at(s, "maS", i))}) com RSI ${fmt(at(s, "rsi", i))}.`,
+          stop: c.close - stopDistance,
+          target: c.close + targetDistance,
+          reason: `Cruzamento de alta com confluência: média ${p["mediaRapida"]} (${fmt(at(s, "maF", i))}) acima da média ${p["mediaLenta"]} (${fmt(at(s, "maS", i))}), RSI ${fmt(at(s, "rsi", i))}, Estocástico em recuperação e alvo projetado em ${((targetDistance / c.close) * 100).toFixed(2)}% (+${n(p, "alvoAtr") || 2.5} ATR).`,
           indicators: ind,
         },
       };
@@ -504,9 +506,9 @@ export const DEFAULT_PARAMS: Record<Archetype, Params> = {
     mediaLenta: 21,
     rsiPeriodo: 14,
     rsiMinimo: 52,
-    alvoPercentual: 0.004,
     atrPeriodo: 14,
     stopAtr: 1.2,
+    alvoAtr: 2.5,
     riscoPorOperacao: 0.01,
     alocacaoMaxima: 0.5,
   },

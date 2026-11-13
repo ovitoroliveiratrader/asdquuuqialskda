@@ -3,7 +3,7 @@ import { INITIAL_CAPITAL, PROMOTION } from "./config";
 import { sma, rsi } from "./indicators";
 import { computeMetrics, maxDrawdown, rankAgents, weekStart, weeklyReturns } from "./metrics";
 import { initialState, macroAllowsEntry, markToMarket, runAgent } from "./simulator";
-import type { Params } from "./strategies";
+import { STRATEGIES, type Params } from "./strategies";
 import type { Candle } from "./types";
 
 const H = 3_600_000;
@@ -35,6 +35,19 @@ const seguidorParams: Params = {
   alocacaoMaxima: 0.5,
 };
 
+const relampagoParams: Params = {
+  timeframe: "5m",
+  mediaRapida: 9,
+  mediaLenta: 21,
+  rsiPeriodo: 14,
+  rsiMinimo: 52,
+  atrPeriodo: 14,
+  stopAtr: 1.2,
+  alvoAtr: 2.5,
+  riscoPorOperacao: 0.01,
+  alocacaoMaxima: 0.5,
+};
+
 const breakoutCandles = () =>
   [100, 100, 100, 100, 110, 112].map((c, i) => ({
     ...mk(i, c, i === 5 ? 111 : c),
@@ -51,6 +64,59 @@ describe("indicadores", () => {
 });
 
 describe("simulador", () => {
+  it("Relâmpago gera alvo ATR com relação risco-retorno de pelo menos 2:1", () => {
+    const signal = STRATEGIES.relampago.decide(
+      {
+        maF: [100, 110],
+        maS: [105, 105],
+        maBase: [90, 90],
+        rsi: [55, 55],
+        macd: [1, 1],
+        stochastic: [20, 40],
+        atr: [2, 2],
+      },
+      1,
+      mk(1, 100),
+      null,
+      relampagoParams,
+    );
+    expect(signal.entry).toBeDefined();
+    const entry = signal.entry!;
+    expect(entry.target).not.toBeNull();
+    expect(entry.target! - 100).toBeGreaterThanOrEqual(2 * (100 - entry.stop));
+  });
+
+  it("Relâmpago vencedor supera 50 USDT líquidos após taxas e slippage", () => {
+    const entryPrice = 100;
+    const quantity = 80;
+    const entryNotional = entryPrice * quantity;
+    const entryFee = entryNotional * 0.001;
+    const state = initialState(10_000);
+    state.cash -= entryNotional + entryFee;
+    state.feesPaid = entryFee;
+    state.positions["BTCUSDT"] = {
+      qty: quantity,
+      entryPrice,
+      entryNotional,
+      entryFee,
+      stop: 97.6,
+      target: 105,
+      openedAt: 0,
+    };
+    state.lastProcessed["BTCUSDT"] = 28 * H;
+    const candles = Array.from({ length: 30 }, (_, i) =>
+      mk(i, i === 29 ? 102 : 100, 100, i === 29 ? 106 : 100, 99),
+    );
+    const out = runAgent({
+      state,
+      archetype: "relampago",
+      params: relampagoParams,
+      candlesBySymbol: { BTCUSDT: candles },
+    });
+    const sell = out.fills.find((f) => f.side === "venda");
+    expect(sell?.realizedPnl).toBeGreaterThan(50);
+  });
+
   it("filtro macro usa a vela histórica e não a última vela futura", () => {
     const macro = Array.from({ length: 60 }, (_, i) => {
       const close = i < 50 ? 100 : i === 50 ? 120 : 80;

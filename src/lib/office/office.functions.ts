@@ -134,13 +134,63 @@ export const createQuantitativeAgents = createServerFn({ method: "POST" })
     await assertOwner(context);
     const { data: existing, error: existingError } = await context.supabase
       .from("agents")
-      .select("id,name,version,notes")
-      .ilike("notes", `%${QUANTITATIVE_MARKER}%`);
+      .select("id,name,version,notes,params,lineage_id,status");
     if (existingError) throw new Error(existingError.message);
 
     const created: { id: string; name: string; version: number }[] = [];
     for (const blueprint of QUANTITATIVE_AGENT_BLUEPRINTS) {
-      const found = existing?.find((a) => a.name === blueprint.name);
+      const names =
+        blueprint.archetype === "relampago"
+          ? ["Timoteo", "Timóteo", "Timoteo v2", "Timóteo v2"]
+          : [blueprint.name];
+      const candidates = existing?.filter((a) => names.includes(a.name)) ?? [];
+      const v2 = candidates.find(
+        (a) => / v2$/.test(a.name) && Number((a.params as Record<string, unknown>)["alvoAtr"]) > 0,
+      );
+      const legacy = candidates.find(
+        (a) => !/ v2$/.test(a.name) && "alvoPercentual" in (a.params as Record<string, unknown>),
+      );
+      if (blueprint.archetype === "relampago" && legacy && !v2) {
+        const pause = await context.supabase
+          .from("agents")
+          .update({ status: "pausado", activity: "pausado" })
+          .eq("id", legacy.id);
+        if (pause.error)
+          throw new Error(`Não foi possível pausar ${legacy.name}: ${pause.error.message}`);
+
+        const familyVersion =
+          Math.max(
+            ...(existing ?? [])
+              .filter((a) => a.lineage_id === legacy.lineage_id)
+              .map((a) => a.version),
+            legacy.version,
+          ) + 1;
+        const params = DEFAULT_PARAMS.relampago;
+        const ins = await context.supabase
+          .from("agents")
+          .insert({
+            lineage_id: legacy.lineage_id,
+            parent_id: legacy.id,
+            version: familyVersion,
+            name: "Timoteo v2",
+            archetype: "relampago",
+            params: params as Json,
+            symbols: ["BTCUSDT", "ETHUSDT"],
+            initial_capital: INITIAL_CAPITAL,
+            state: initialState(INITIAL_CAPITAL) as unknown as Json,
+            equity: INITIAL_CAPITAL,
+            cash: INITIAL_CAPITAL,
+            notes: `${QUANTITATIVE_MARKER}: v2 do Timoteo; substitui alvoPercentual legado por alvoAtr 2.5 e foi criado para testar a nova assimetria de risco/retorno.`,
+          })
+          .select("id,name,version")
+          .single();
+        if (ins.error) throw new Error(`Não foi possível criar Timoteo v2: ${ins.error.message}`);
+        created.push(ins.data);
+        continue;
+      }
+      const found =
+        v2 ??
+        candidates.find((a) => a.name === blueprint.name && a.notes?.includes(QUANTITATIVE_MARKER));
       if (found) {
         created.push({ id: found.id, name: found.name, version: found.version });
         continue;
